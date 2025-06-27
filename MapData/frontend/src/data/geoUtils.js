@@ -113,7 +113,7 @@ const filterTerritories = (geoJson) => {
   // Filter out territories
   result.features = result.features.filter(feature => {
     // Get state FIPS code - ensure we're checking both possible locations and converting to string
-    const fips = String(feature.id || (feature.properties && (feature.properties.STATE || feature.properties.STATEFP)));
+    const fips = String(feature.id || (feature.properties && (feature.properties.STATE || feature.properties.STATEFP || feature.properties.fips_code)));
     
     // Keep if it's not in the territory list (continental 48 + Alaska + Hawaii)
     return !territoryFips.includes(fips);
@@ -124,21 +124,23 @@ const filterTerritories = (geoJson) => {
 
 // Function to reposition Alaska and Hawaii to the southwest of Texas
 export const repositionAlaskaHawaii = (geoJson) => {
-  if (!geoJson || !geoJson.features) return geoJson;
+  if (!geoJson || !geoJson.features) {
+    console.warn('repositionAlaskaHawaii: Invalid GeoJSON data provided');
+    return geoJson;
+  }
+  
+  console.log('Starting repositionAlaskaHawaii function');
+  console.log(`Number of features in GeoJSON: ${geoJson.features.length}`);
   
   // Deep clone the GeoJSON to avoid mutating the original
   const result = JSON.parse(JSON.stringify(geoJson));
-  
-  // Define transformation parameters
-  const alaskaFips = '02';
-  const hawaiiFips = '15';
   
   // Position southwest of Texas
   const alaskaTransform = {
     scale: 0.35,
     scaleY: 0.5,  // Higher Y-scale to fix vertical compression
     translateX: 45,
-    translateY: -30
+    translateY: -100
   };
   
   const hawaiiTransform = {
@@ -150,13 +152,79 @@ export const repositionAlaskaHawaii = (geoJson) => {
   // Reference point (approximate southwest corner of Texas)
   const texasReference = [-106, 25];
   
+  // Count how many features are transformed
+  let alaskaCount = 0;
+  let hawaiiCount = 0;
+  
+  // Enhanced Alaska identification - check for any property that might indicate Alaska
+  const isAlaskaFeature = (feature) => {
+    if (!feature || !feature.properties) return false;
+    
+    const props = feature.properties;
+    // Check standard property names
+    const name = (props.name || props.NAME || '').toLowerCase();
+    const fips = String(props.fips_code || props.STATE || props.STATEFP || feature.id || '');
+    
+    // Check for Alaska in any string property
+    const hasAlaskaInProps = Object.entries(props).some(([key, val]) => 
+      typeof val === 'string' && val.toLowerCase().includes('alaska')
+    );
+    
+    // Check for Alaska's FIPS code in any property
+    const hasAlaskaFipsInProps = Object.entries(props).some(([key, val]) => 
+      typeof val === 'string' && val === '02'
+    );
+    
+    // Check for Alaska's abbreviation
+    const hasAKInProps = Object.entries(props).some(([key, val]) => 
+      typeof val === 'string' && 
+      (val.toUpperCase() === 'AK' || key.toLowerCase() === 'abbreviation' && val.toUpperCase() === 'AK')
+    );
+    
+    console.log(`Checking feature for Alaska: name=${name}, fips=${fips}, hasAlaskaInProps=${hasAlaskaInProps}, hasAKInProps=${hasAKInProps}`);
+    
+    return name === 'alaska' || fips === '02' || hasAlaskaInProps || hasAlaskaFipsInProps || hasAKInProps;
+  };
+  
+  // Debug: Check for Alaska in the features - using more comprehensive property checks
+  const alaskaFeatures = result.features.filter(feature => isAlaskaFeature(feature));
+  
+  console.log(`Found ${alaskaFeatures.length} Alaska features before transformation`);
+  if (alaskaFeatures.length > 0) {
+    console.log('First Alaska feature properties:', alaskaFeatures[0].properties);
+  } else {
+    console.log('No Alaska features found! Checking all feature properties for debugging:');
+    // Log a sample of feature properties to help debug
+    const sampleSize = Math.min(5, result.features.length);
+    for (let i = 0; i < sampleSize; i++) {
+      const feature = result.features[i];
+      const props = feature.properties || {};
+      console.log(`Feature ${i} properties:`, {
+        id: feature.id,
+        name: props.NAME || props.name || 'undefined',
+        fips: props.STATE || props.STATEFP || props.state || props.fips_code || 'undefined',
+        propertyKeys: Object.keys(props)
+      });
+    }
+  }
+  
   // Process each feature
   result.features = result.features.map(feature => {
-    // Get state FIPS code - ensure we're checking both possible locations and converting to string
-    const fips = String(feature.id || (feature.properties && (feature.properties.STATE || feature.properties.STATEFP)));
+    // Check all possible locations for state FIPS code and name
+    const props = feature.properties || {};
+    const name = (props.name || props.NAME || '').toLowerCase();
+    const fips = props.fips_code || props.STATE || props.STATEFP || '';
     
-    if (fips === alaskaFips) {
+    // More comprehensive check for Alaska
+    const isAlaska = isAlaskaFeature(feature);
+    
+    // More comprehensive check for Hawaii
+    const isHawaii = name === 'hawaii' || fips === '15';
+    
+    if (isAlaska) {
       // Transform Alaska
+      console.log(`Transforming Alaska feature: ${props.name || props.NAME || 'unnamed feature'}`);
+      alaskaCount++;
       feature = transformFeature(
         feature, 
         alaskaTransform.scale, 
@@ -164,8 +232,10 @@ export const repositionAlaskaHawaii = (geoJson) => {
         texasReference[1] + alaskaTransform.translateY,
         alaskaTransform.scaleY
       );
-    } else if (fips === hawaiiFips) {
+    } else if (isHawaii) {
       // Transform Hawaii
+      console.log(`Transforming Hawaii feature: ${props.name || props.NAME || 'unnamed feature'}`);
+      hawaiiCount++;
       feature = transformFeature(
         feature, 
         hawaiiTransform.scale, 
@@ -177,33 +247,48 @@ export const repositionAlaskaHawaii = (geoJson) => {
     return feature;
   });
   
+  console.log(`Repositioning complete. Transformed ${alaskaCount} Alaska features and ${hawaiiCount} Hawaii features.`);
+  
   return result;
 };
 
 // Helper function to transform a GeoJSON feature
 const transformFeature = (feature, scale, translateX, translateY, scaleY) => {
-  if (!feature.geometry) return feature;
+  if (!feature.geometry) {
+    console.warn('transformFeature: Feature has no geometry');
+    return feature;
+  }
+  
+  console.log(`Transforming feature with scale=${scale}, translateX=${translateX}, translateY=${translateY}, scaleY=${scaleY || scale}`);
   
   // Process different geometry types
   if (feature.geometry.type === 'Polygon') {
+    console.log('Transforming Polygon geometry');
     feature.geometry.coordinates = transformPolygon(
       feature.geometry.coordinates, scale, translateX, translateY, scaleY
     );
   } else if (feature.geometry.type === 'MultiPolygon') {
+    console.log('Transforming MultiPolygon geometry');
     feature.geometry.coordinates = feature.geometry.coordinates.map(polygon => 
       transformPolygon(polygon, scale, translateX, translateY, scaleY)
     );
+  } else {
+    console.log(`Skipping unsupported geometry type: ${feature.geometry.type}`);
   }
   
   return feature;
 };
 
-// Transform polygon coordinates
+// Helper function to transform polygon coordinates
 const transformPolygon = (polygon, scale, translateX, translateY, scaleY) => {
-  return polygon.map(ring => 
-    ring.map(coord => [
-      (coord[0] * scale) + translateX,
-      (coord[1] * (scaleY || scale)) + translateY
-    ])
-  );
+  const effectiveScaleY = scaleY || scale;
+  
+  return polygon.map(ring => {
+    return ring.map(coord => {
+      return [
+        coord[0] * scale + translateX,
+        coord[1] * effectiveScaleY + translateY
+      ];
+    });
+  });
 }; 

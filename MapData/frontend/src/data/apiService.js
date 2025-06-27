@@ -27,19 +27,49 @@ export const geoDataService = {
       
       // Validate the response data
       const data = response.data;
-      if (!data || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
-        console.error('Invalid GeoJSON response structure:', data);
-        throw new Error('Invalid GeoJSON response structure');
+      
+      // Check if Alaska exists in the data using more comprehensive checks
+      const alaskaFeature = data.features.find(feature => {
+        const props = feature.properties || {};
+        const name = (props.name || props.NAME || '').toLowerCase();
+        const fips = props.fips_code || props.STATE || props.STATEFP || '';
+        return name === 'alaska' || fips === '02';
+      });
+      
+      console.log('Alaska found in API response:', !!alaskaFeature);
+      if (alaskaFeature) {
+        console.log('Alaska properties:', alaskaFeature.properties);
+      } else {
+        console.log('No Alaska found. Checking first few features:');
+        const sampleSize = Math.min(3, data.features.length);
+        for (let i = 0; i < sampleSize; i++) {
+          console.log(`Feature ${i} properties:`, data.features[i].properties);
+        }
       }
       
-      // Check if features have area_sq_miles
+      // Check for Hawaii
+      const hawaiiFeature = data.features.find(feature => {
+        const props = feature.properties || {};
+        const name = (props.name || props.NAME || '').toLowerCase();
+        const fips = props.fips_code || props.STATE || props.STATEFP || '';
+        return name === 'hawaii' || fips === '15';
+      });
+      
+      console.log('Hawaii found in API response:', !!hawaiiFeature);
+      if (hawaiiFeature) {
+        console.log('Hawaii properties:', hawaiiFeature.properties);
+      }
+      
+      // Check if area_sq_miles exists in properties
       if (data.features.length > 0) {
-        const firstFeature = data.features[0];
-        if (!firstFeature.properties || !('area_sq_miles' in firstFeature.properties)) {
+        const sampleFeature = data.features[0];
+        if (!sampleFeature.properties || !('area_sq_miles' in sampleFeature.properties)) {
           console.warn('area_sq_miles not found in state properties');
         }
       }
       
+      // Return the unmodified data from the API
+      console.log('Returning states data from API service');
       return data;
     } catch (error) {
       console.error('Error fetching states data:', error);
@@ -80,14 +110,36 @@ export const geoDataService = {
         throw new Error('Invalid GeoJSON response structure');
       }
       
-      // Check if features have area_sq_miles
+      // Check for Alaska counties
+      const alaskaCounties = data.features.filter(feature => {
+        const props = feature.properties || {};
+        const stateId = props.state_id;
+        return stateId === 'b2785b90-a07d-4f9a-90d7-10edc3a6fe00'; // Known Alaska ID
+      });
+      console.log(`Found ${alaskaCounties.length} Alaska counties`);
+      
+      // Check for Hawaii counties
+      const hawaiiCounties = data.features.filter(feature => {
+        const props = feature.properties || {};
+        // This would need to be updated with the actual Hawaii state ID from the database
+        const name = (props.name || '').toLowerCase();
+        return name.includes('hawaii') || name.includes('honolulu') || name.includes('maui') || name.includes('kauai');
+      });
+      console.log(`Found ${hawaiiCounties.length} Hawaii counties`);
+      if (hawaiiCounties.length === 0) {
+        console.log('No Hawaii counties found. This may be expected if Hawaii counties are not in the database.');
+      }
+      
+      // Check if area_sq_miles exists in properties
       if (data.features.length > 0) {
-        const firstFeature = data.features[0];
-        if (!firstFeature.properties || !('area_sq_miles' in firstFeature.properties)) {
+        const sampleFeature = data.features[0];
+        if (!sampleFeature.properties || !('area_sq_miles' in sampleFeature.properties)) {
           console.warn('area_sq_miles not found in county properties');
         }
       }
       
+      // Return the unmodified data from the API
+      console.log('Returning counties data from API service');
       return data;
     } catch (error) {
       console.error('Error fetching counties data:', error);

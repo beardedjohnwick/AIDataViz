@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
 // Import TopoJSON data (as fallback)
 import statesTopoJSON from '../data/us-states.json';
 import countiesTopoJSON from '../data/us-counties.json';
 // Import conversion utilities
-import { convertTopoToGeoStates, convertTopoToGeoCounties } from '../data/geoUtils';
+import { convertTopoToGeoStates, convertTopoToGeoCounties, repositionAlaskaHawaii } from '../data/geoUtils';
 // Import API service
 import { geoDataService } from '../data/apiService';
 // Import layer components
@@ -129,105 +129,141 @@ function MapComponent() {
     }
   };
 
-  // Load data from API or fallback to static files
-  useEffect(() => {
-    const loadData = async () => {
+  // Define loadStatesData function at component scope so it can be called from anywhere
+  const loadStatesData = useCallback(async () => {
+    try {
       setLoading(true);
-      setError(null);
+      console.log('Fetching states data...');
       
+      // First check if API is healthy
+      const isApiHealthy = await checkApiHealth();
+      
+      if (!isApiHealthy) {
+        console.warn('API health check failed, falling back to static files');
+        throw new Error('API health check failed');
+      }
+      
+      const statesResponse = await geoDataService.getStates(true);
+      console.log('States data from API:', statesResponse);
+      
+      // Validate the GeoJSON data
+      if (validateGeoJSON(statesResponse)) {
+        console.log('API data is valid GeoJSON, applying Alaska/Hawaii repositioning...');
+        
+        // Check if Alaska exists in the data
+        const alaskaFeature = statesResponse.features.find(feature => {
+          const props = feature.properties || {};
+          const name = (props.name || props.NAME || '').toLowerCase();
+          const fips = props.fips_code || props.STATE || props.STATEFP || '';
+          return name === 'alaska' || fips === '02';
+        });
+        
+        console.log('Alaska found in API response before repositioning:', !!alaskaFeature);
+        
+        // Apply repositionAlaskaHawaii to ensure Alaska and Hawaii are properly positioned
+        const repositionedStatesData = repositionAlaskaHawaii(statesResponse);
+        console.log('Alaska/Hawaii repositioning complete');
+        
+        // Verify Alaska is still present after repositioning
+        const alaskaAfterRepositioning = repositionedStatesData.features.find(feature => {
+          const props = feature.properties || {};
+          const name = (props.name || props.NAME || '').toLowerCase();
+          const fips = props.fips_code || props.STATE || props.STATEFP || '';
+          return name === 'alaska' || fips === '02';
+        });
+        
+        console.log('Alaska found after repositioning:', !!alaskaAfterRepositioning);
+        
+        setStatesData(repositionedStatesData);
+        setUsingApi(true);
+      } else {
+        console.error('Invalid GeoJSON data received from API, falling back to static files');
+        throw new Error('Invalid GeoJSON data');
+      }
+    } catch (err) {
+      console.error('Error loading data from API:', err);
+      console.log('Falling back to static files...');
+      
+      // Fallback to static files
+      const staticStatesData = convertTopoToGeoStates(statesTopoJSON);
+      
+      // Apply Alaska/Hawaii repositioning to static data as well
+      const repositionedStatesData = repositionAlaskaHawaii(staticStatesData);
+      
+      // Verify Alaska is present in static data
+      const alaskaInStatic = repositionedStatesData.features.find(feature => {
+        const props = feature.properties || {};
+        const name = (props.name || props.NAME || '').toLowerCase();
+        return name === 'alaska';
+      });
+      
+      console.log('Alaska found in static data after repositioning:', !!alaskaInStatic);
+      
+      setStatesData(repositionedStatesData);
+      setUsingApi(false);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Define loadCountiesData function at component scope so it can be called from anywhere
+  const loadCountiesData = useCallback(async () => {
+    if (countyToggle && !countiesData && usingApi) {
       try {
-        // First check if API is healthy
-        const isApiHealthy = await checkApiHealth();
+        setLoading(true);
+        console.log('Fetching counties data after toggle...');
+        const countiesResponse = await geoDataService.getCounties(true);
+        console.log('Counties data from API after toggle:', countiesResponse);
         
-        if (!isApiHealthy) {
-          console.warn('API health check failed, falling back to static files');
-          throw new Error('API health check failed');
-        }
-        
-        console.log('Attempting to fetch data from API...');
-        // Try to fetch data from API
-        const statesResponse = await geoDataService.getStates(true);
-        console.log('States data from API:', statesResponse);
-        
-        // Validate the GeoJSON data
-        if (validateGeoJSON(statesResponse)) {
-          setStatesData(statesResponse);
+        if (validateGeoJSON(countiesResponse)) {
+          // Apply repositionAlaskaHawaii to ensure Alaska and Hawaii counties are properly positioned
+          console.log('Repositioning Alaska and Hawaii for counties data after toggle');
+          const repositionedCountiesData = repositionAlaskaHawaii(countiesResponse);
+          console.log('Counties repositioning complete, features count:', repositionedCountiesData.features.length);
           
-          // Only fetch counties if needed (to save bandwidth)
-          if (countyToggle) {
-            console.log('Fetching counties data from API...');
-            const countiesResponse = await geoDataService.getCounties(true);
-            console.log('Counties data from API:', countiesResponse);
-            
-            if (validateGeoJSON(countiesResponse)) {
-              setCountiesData(countiesResponse);
-            } else {
-              throw new Error('Invalid counties GeoJSON data');
-            }
+          // Check if Hawaii counties exist
+          const hawaiiCounties = repositionedCountiesData.features.filter(feature => {
+            const props = feature.properties || {};
+            const name = (props.name || '').toLowerCase();
+            return name.includes('hawaii') || name.includes('honolulu') || 
+                   name.includes('maui') || name.includes('kauai');
+          });
+          
+          console.log(`Hawaii counties found after repositioning: ${hawaiiCounties.length}`);
+          
+          // If no Hawaii counties in the API data, we might need to add them from static data
+          if (hawaiiCounties.length === 0) {
+            console.log('No Hawaii counties found in API data, checking static data');
+            // This could be enhanced to actually add Hawaii counties from static data if needed
           }
           
-          setUsingApi(true);
-          setLoading(false);
+          setCountiesData(repositionedCountiesData);
         } else {
-          throw new Error('Invalid states GeoJSON data');
+          throw new Error('Invalid counties GeoJSON data');
         }
-      } catch (apiError) {
-        console.warn('Failed to fetch data from API, falling back to static files:', apiError);
+      } catch (err) {
+        console.error('Error loading counties data:', err);
+        setError('Failed to load counties data');
         
-        try {
-          // Fallback to static files
-          const statesGeoJSON = convertTopoToGeoStates(statesTopoJSON);
-          const countiesGeoJSON = convertTopoToGeoCounties(countiesTopoJSON);
-          
-          setStatesData(statesGeoJSON);
-          setCountiesData(countiesGeoJSON);
-          setUsingApi(false);
-          setLoading(false);
-        } catch (fallbackError) {
-          setError('Failed to process map data');
-          console.error('Error processing map data:', fallbackError);
-          setLoading(false);
-        }
+        // Fallback to static counties data
+        const staticCountiesData = convertTopoToGeoCounties(countiesTopoJSON);
+        const repositionedCountiesData = repositionAlaskaHawaii(staticCountiesData);
+        setCountiesData(repositionedCountiesData);
+      } finally {
+        setLoading(false);
       }
-    };
-    
-    loadData();
-  }, []); // Only run on mount, not when countyToggle changes
+    }
+  }, [countyToggle, countiesData, usingApi]);
+
+  // Load data from API or fallback to static files
+  useEffect(() => {
+    loadStatesData();
+  }, [loadStatesData]);
 
   // Load counties data when toggle is switched on
   useEffect(() => {
-    const loadCountiesData = async () => {
-      if (countyToggle && !countiesData && usingApi) {
-        try {
-          setLoading(true);
-          console.log('Fetching counties data after toggle...');
-          const countiesResponse = await geoDataService.getCounties(true);
-          console.log('Counties data from API after toggle:', countiesResponse);
-          
-          if (validateGeoJSON(countiesResponse)) {
-            setCountiesData(countiesResponse);
-          } else {
-            throw new Error('Invalid counties GeoJSON data');
-          }
-        } catch (error) {
-          console.error('Error fetching counties data:', error);
-          
-          // Fallback to static files if API fails
-          try {
-            const countiesGeoJSON = convertTopoToGeoCounties(countiesTopoJSON);
-            setCountiesData(countiesGeoJSON);
-            setUsingApi(false);
-          } catch (fallbackError) {
-            setError('Failed to load counties data');
-          }
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-    
     loadCountiesData();
-  }, [countyToggle, countiesData, usingApi]);
+  }, [countyToggle, countiesData, usingApi, loadCountiesData]);
 
   if (loading) {
     return <div className="loading-indicator">Loading map data...</div>;
