@@ -1,3 +1,15 @@
+# v1.4.0 - Alaska Position Further Refinement
+
+## Major Changes
+- Further refined Alaska's position on the map for better visual representation
+- Enhanced map hover interactions for better user experience
+
+## Frontend Changes
+- Updated ALASKA_CONFIG in geoUtils.js to adjust Alaska's position
+- Changed translateY value from -70 to -30 for optimal positioning
+- Improved tooltip behavior in MapComponent.js
+- Enhanced hover state styling in MapStyles.css
+
 # v1.3.0 - Alaska Position Refinement
 
 ## Major Changes

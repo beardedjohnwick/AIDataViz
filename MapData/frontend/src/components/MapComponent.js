@@ -52,6 +52,22 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties }) => {
             opacity: layer.options.opacity
           };
           
+          // Get feature name for tooltip
+          const featureName = feature.properties?.name || 
+                             (isCounty ? `County ID: ${feature.id}` : `State ID: ${feature.id}`);
+          
+          // Add tooltip to display feature name
+          layer.bindTooltip(
+            `<div class="custom-tooltip"><strong>${featureName}</strong></div>`,
+            {
+              permanent: false,
+              direction: 'auto',
+              className: isCounty ? 'county-tooltip' : 'state-tooltip',
+              sticky: true, // Makes tooltip follow the mouse
+              offset: [10, 0] // Small offset from cursor
+            }
+          );
+          
           // Only add hover state to states when counties are not shown
           if (!showCounties && !isCounty) {
             layer.on({
