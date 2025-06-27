@@ -1,3 +1,15 @@
+# v1.3.0 - Alaska Position Refinement
+
+## Major Changes
+- Further refined Alaska's position on the map
+- Improved map hover interactions for both states and counties
+
+## Frontend Changes
+- Updated ALASKA_CONFIG in geoUtils.js to adjust Alaska's position
+- Changed translateY value from -100 to -30 for better positioning
+- Enhanced hover interactions in MapComponent.js
+- Refined styling in MapStyles.css
+
 # v1.2.0 - Alaska Position Update
 
 ## Major Changes
