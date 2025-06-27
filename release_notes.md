@@ -1,4 +1,4 @@
-# v1.5.0 - Map Bounds Implementation
+# v1.5.1 - Map Bounds Implementation
 
 ## Major Changes
 - Added map bounds to restrict user dragging beyond geographic limits
