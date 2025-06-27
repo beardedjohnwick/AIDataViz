@@ -7,7 +7,16 @@ import * as topojson from 'topojson-client';
 import statesData from '../data/us-states.json';
 import countiesData from '../data/us-counties.json';
 import { geoDataService } from '../data/apiService';
-import { transformHawaii, isHawaiiFeature, setHawaiiTransformation, HAWAII_CONFIG } from '../data/geoUtils';
+import { 
+  transformHawaii, 
+  isHawaiiFeature, 
+  setHawaiiTransformation, 
+  HAWAII_CONFIG, 
+  transformAlaska, 
+  isAlaskaFeature, 
+  setAlaskaTransformation, 
+  ALASKA_CONFIG 
+} from '../data/geoUtils';
 
 // Component to force re-render of GeoJSON when data changes
 const GeoJSONWithUpdates = ({ data, style, zIndex }) => {
@@ -54,15 +63,29 @@ const MapComponent = ({ showCounties = true }) => {
   const [hawaiiTranslateX, setHawaiiTranslateX] = useState(HAWAII_CONFIG.defaults.translateX);
   const [hawaiiTranslateY, setHawaiiTranslateY] = useState(HAWAII_CONFIG.defaults.translateY);
   
-  // State and county data with Hawaii transformed
+  // Alaska transformation parameters
+  const [alaskaScale, setAlaskaScale] = useState(ALASKA_CONFIG.defaults.scale);
+  const [alaskaScaleY, setAlaskaScaleY] = useState(ALASKA_CONFIG.defaults.scaleY);
+  const [alaskaTranslateX, setAlaskaTranslateX] = useState(ALASKA_CONFIG.defaults.translateX);
+  const [alaskaTranslateY, setAlaskaTranslateY] = useState(ALASKA_CONFIG.defaults.translateY);
+  
+  // State and county data with Hawaii and Alaska transformed
   const [transformedStateData, setTransformedStateData] = useState(null);
   const [transformedCountyData, setTransformedCountyData] = useState(null);
   
   // Ref to store the current transformation parameters
-  const transformationRef = useRef({
+  const hawaiiTransformationRef = useRef({
     scale: hawaiiScale,
     translateX: hawaiiTranslateX,
     translateY: hawaiiTranslateY
+  });
+  
+  // Ref to store the current Alaska transformation parameters
+  const alaskaTransformationRef = useRef({
+    scale: alaskaScale,
+    scaleY: alaskaScaleY,
+    translateX: alaskaTranslateX,
+    translateY: alaskaTranslateY
   });
 
   // Fix Leaflet's icon paths which can cause issues in React
@@ -83,30 +106,70 @@ const MapComponent = ({ showCounties = true }) => {
         setHawaiiTranslateY(translateY);
         
         // Update the ref with current values
-        transformationRef.current = { scale, translateX, translateY };
-        return transformationRef.current;
+        hawaiiTransformationRef.current = { scale, translateX, translateY };
+        return hawaiiTransformationRef.current;
       },
       getTransformation: () => {
-        return transformationRef.current;
+        return hawaiiTransformationRef.current;
       },
       reset: () => {
         setHawaiiScale(HAWAII_CONFIG.defaults.scale);
         setHawaiiTranslateX(HAWAII_CONFIG.defaults.translateX);
         setHawaiiTranslateY(HAWAII_CONFIG.defaults.translateY);
-        transformationRef.current = { ...HAWAII_CONFIG.defaults };
-        return transformationRef.current;
+        hawaiiTransformationRef.current = { ...HAWAII_CONFIG.defaults };
+        return hawaiiTransformationRef.current;
+      }
+    };
+    
+    // Expose the Alaska transformation API to the window object
+    window.alaskaTransform = {
+      setTransformation: (scale, translateX, translateY, scaleY) => {
+        setAlaskaScale(scale);
+        setAlaskaTranslateX(translateX);
+        setAlaskaTranslateY(translateY);
+        setAlaskaScaleY(scaleY || scale);
+        
+        // Update the ref with current values
+        alaskaTransformationRef.current = { 
+          scale, 
+          translateX, 
+          translateY, 
+          scaleY: scaleY || scale 
+        };
+        return alaskaTransformationRef.current;
+      },
+      getTransformation: () => {
+        return alaskaTransformationRef.current;
+      },
+      reset: () => {
+        setAlaskaScale(ALASKA_CONFIG.defaults.scale);
+        setAlaskaScaleY(ALASKA_CONFIG.defaults.scaleY);
+        setAlaskaTranslateX(ALASKA_CONFIG.defaults.translateX);
+        setAlaskaTranslateY(ALASKA_CONFIG.defaults.translateY);
+        alaskaTransformationRef.current = { ...ALASKA_CONFIG.defaults };
+        return alaskaTransformationRef.current;
       }
     };
   }, []);
   
-  // Update ref when state changes
+  // Update Hawaii ref when state changes
   useEffect(() => {
-    transformationRef.current = {
+    hawaiiTransformationRef.current = {
       scale: hawaiiScale,
       translateX: hawaiiTranslateX,
       translateY: hawaiiTranslateY
     };
   }, [hawaiiScale, hawaiiTranslateX, hawaiiTranslateY]);
+  
+  // Update Alaska ref when state changes
+  useEffect(() => {
+    alaskaTransformationRef.current = {
+      scale: alaskaScale,
+      scaleY: alaskaScaleY,
+      translateX: alaskaTranslateX,
+      translateY: alaskaTranslateY
+    };
+  }, [alaskaScale, alaskaScaleY, alaskaTranslateX, alaskaTranslateY]);
 
   // Filter function to keep only continental US, Alaska, Hawaii, and DC
   // Territories to exclude: Puerto Rico (72), American Samoa (60), Guam (66),
@@ -189,30 +252,60 @@ const MapComponent = ({ showCounties = true }) => {
     }
   }, []);
   
-  // Apply Hawaii transformations when data or transformation parameters change
+  // Apply Hawaii and Alaska transformations when data or transformation parameters change
   useEffect(() => {
     if (stateGeoJsonData) {
-      // Transform Hawaii in state data
-      const transformedStates = transformHawaii(
+      // First transform Hawaii in state data
+      const hawaiiTransformed = transformHawaii(
         stateGeoJsonData, 
         hawaiiScale, 
         hawaiiTranslateX, 
         hawaiiTranslateY
       );
-      setTransformedStateData(transformedStates);
+      
+      // Then transform Alaska in the Hawaii-transformed data
+      const fullyTransformed = transformAlaska(
+        hawaiiTransformed,
+        alaskaScale,
+        alaskaTranslateX,
+        alaskaTranslateY,
+        alaskaScaleY
+      );
+      
+      setTransformedStateData(fullyTransformed);
     }
     
     if (countyGeoJsonData) {
-      // Transform Hawaii in county data
-      const transformedCounties = transformHawaii(
+      // First transform Hawaii in county data
+      const hawaiiTransformed = transformHawaii(
         countyGeoJsonData, 
         hawaiiScale, 
         hawaiiTranslateX, 
         hawaiiTranslateY
       );
-      setTransformedCountyData(transformedCounties);
+      
+      // Then transform Alaska in the Hawaii-transformed data
+      const fullyTransformed = transformAlaska(
+        hawaiiTransformed,
+        alaskaScale,
+        alaskaTranslateX,
+        alaskaTranslateY,
+        alaskaScaleY
+      );
+      
+      setTransformedCountyData(fullyTransformed);
     }
-  }, [stateGeoJsonData, countyGeoJsonData, hawaiiScale, hawaiiTranslateX, hawaiiTranslateY]);
+  }, [
+    stateGeoJsonData, 
+    countyGeoJsonData, 
+    hawaiiScale, 
+    hawaiiTranslateX, 
+    hawaiiTranslateY,
+    alaskaScale,
+    alaskaScaleY,
+    alaskaTranslateX,
+    alaskaTranslateY
+  ]);
 
   // Style for the state borders
   const stateStyle = {
@@ -287,6 +380,46 @@ const MapComponent = ({ showCounties = true }) => {
           value={hawaiiTranslateY}
           onChange={(e) => setHawaiiTranslateY(parseFloat(e.target.value))}
           data-hawaii-control="translateY"
+        />
+      </div>
+      
+      {/* Alaska transformation controls - hidden from UI but available for programmatic control */}
+      <div className="alaska-controls" style={{ display: 'none' }}>
+        <input
+          type="range"
+          min="0.1"
+          max="1"
+          step="0.05"
+          value={alaskaScale}
+          onChange={(e) => setAlaskaScale(parseFloat(e.target.value))}
+          data-alaska-control="scale"
+        />
+        <input
+          type="range"
+          min="0.1"
+          max="1"
+          step="0.05"
+          value={alaskaScaleY}
+          onChange={(e) => setAlaskaScaleY(parseFloat(e.target.value))}
+          data-alaska-control="scaleY"
+        />
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={alaskaTranslateX}
+          onChange={(e) => setAlaskaTranslateX(parseFloat(e.target.value))}
+          data-alaska-control="translateX"
+        />
+        <input
+          type="range"
+          min="-150"
+          max="0"
+          step="1"
+          value={alaskaTranslateY}
+          onChange={(e) => setAlaskaTranslateY(parseFloat(e.target.value))}
+          data-alaska-control="translateY"
         />
       </div>
     </>

@@ -23,6 +23,30 @@ export const HAWAII_CONFIG = {
   }
 };
 
+// Configuration constants for Alaska transformation
+export const ALASKA_CONFIG = {
+  // Default transformation values
+  defaults: {
+    scale: 0.35,
+    scaleY: 0.5,
+    translateX: 45,
+    translateY: -30  // Moved Alaska north by changing from -100 to -70
+  },
+  // Reference point (approximate southwest corner of Texas)
+  referencePoint: [-106, 25],
+  // Alaska state FIPS code
+  stateFips: '02',
+  // Alaska borough/census area names
+  countyNames: ['anchorage', 'juneau', 'fairbanks', 'kenai', 'matanuska', 'kodiak', 'bethel', 'nome', 'sitka', 'valdez'],
+  // Approximate bounding box for Alaska
+  boundingBox: {
+    minLon: -180,
+    maxLon: -130,
+    minLat: 51,
+    maxLat: 72
+  }
+};
+
 // Convert TopoJSON to GeoJSON for states
 export const convertTopoToGeoStates = (topoData) => {
   if (!topoData) return null;
@@ -483,4 +507,186 @@ const transformPolygon = (polygon, scale, translateX, translateY, scaleY) => {
       ];
     });
   });
+};
+
+// Helper function to identify Alaska features
+export const isAlaskaFeature = (feature) => {
+  if (!feature || !feature.properties) return false;
+  
+  const props = feature.properties;
+  const name = (props.name || props.NAME || '').toLowerCase();
+  const fips = String(props.fips_code || props.STATE || props.STATEFP || feature.id || '');
+  
+  // For counties, check if the first 2 digits of the 5-digit FIPS code match Alaska's state code
+  const countyFips = String(props.GEOID || props.fips_code || feature.id || '');
+  const isAlaskaCounty = countyFips.length === 5 && countyFips.substring(0, 2) === ALASKA_CONFIG.stateFips;
+  
+  // Check for Alaska in any string property
+  const hasAlaskaInProps = Object.entries(props).some(([key, val]) => 
+    typeof val === 'string' && val.toLowerCase().includes('alaska')
+  );
+  
+  // Check for Alaska's FIPS code in any property
+  const hasAlaskaFipsInProps = Object.entries(props).some(([key, val]) => 
+    typeof val === 'string' && (val === ALASKA_CONFIG.stateFips || val === `${ALASKA_CONFIG.stateFips}000`)
+  );
+  
+  // Check for Alaska's abbreviation
+  const hasAKInProps = Object.entries(props).some(([key, val]) => 
+    typeof val === 'string' && 
+    (val.toUpperCase() === 'AK' || key.toLowerCase() === 'abbreviation' && val.toUpperCase() === 'AK')
+  );
+  
+  // Check for known Alaska county/borough names
+  const hasAlaskaCountyName = name && ALASKA_CONFIG.countyNames.some(countyName => name.includes(countyName));
+  
+  // Check for Alaska coordinates (approximate bounding box for Alaska)
+  let isInAlaskaRegion = false;
+  if (feature.geometry && feature.geometry.coordinates) {
+    try {
+      const bbox = ALASKA_CONFIG.boundingBox;
+      
+      // For Polygon geometries
+      if (feature.geometry.type === 'Polygon' && feature.geometry.coordinates.length > 0) {
+        const coords = feature.geometry.coordinates[0];
+        isInAlaskaRegion = coords.some(coord => {
+          const lon = coord[0];
+          const lat = coord[1];
+          return (lon > bbox.minLon && lon < bbox.maxLon && lat > bbox.minLat && lat < bbox.maxLat);
+        });
+      }
+      // For MultiPolygon geometries
+      else if (feature.geometry.type === 'MultiPolygon' && feature.geometry.coordinates.length > 0) {
+        isInAlaskaRegion = feature.geometry.coordinates.some(polygon => {
+          if (polygon.length > 0) {
+            const coords = polygon[0];
+            return coords.some(coord => {
+              const lon = coord[0];
+              const lat = coord[1];
+              return (lon > bbox.minLon && lon < bbox.maxLon && lat > bbox.minLat && lat < bbox.maxLat);
+            });
+          }
+          return false;
+        });
+      }
+    } catch (e) {
+      console.warn('Error checking Alaska coordinates:', e);
+    }
+  }
+  
+  return name === 'alaska' || 
+         fips === ALASKA_CONFIG.stateFips || 
+         isAlaskaCounty || 
+         hasAlaskaInProps || 
+         hasAlaskaFipsInProps || 
+         hasAKInProps || 
+         hasAlaskaCountyName ||
+         isInAlaskaRegion;
+};
+
+// Helper function to check if a feature is a duplicate of Alaska
+export const isDuplicateAlaskaFeature = (feature, transformedFeatures) => {
+  if (!feature || !feature.properties || !feature.geometry || !transformedFeatures) {
+    return false;
+  }
+  
+  // Check if this is an Alaska feature
+  if (!isAlaskaFeature(feature)) {
+    return false;
+  }
+  
+  // Get feature properties
+  const props = feature.properties || {};
+  const name = (props.name || props.NAME || '').toLowerCase();
+  const fips = String(props.fips_code || props.STATE || props.STATEFP || feature.id || '');
+  
+  // Check if this feature has already been transformed
+  return transformedFeatures.some(transformedFeature => {
+    const transformedProps = transformedFeature.properties || {};
+    const transformedName = (transformedProps.name || transformedProps.NAME || '').toLowerCase();
+    const transformedFips = String(transformedProps.fips_code || transformedProps.STATE || transformedProps.STATEFP || transformedFeature.id || '');
+    
+    // Check if names or FIPS codes match
+    return (name && transformedName && name === transformedName) || 
+           (fips && transformedFips && fips === transformedFips);
+  });
+};
+
+// Function to dynamically transform Alaska's position and scale
+export const transformAlaska = (geoJson, scale = ALASKA_CONFIG.defaults.scale, 
+                               translateX = ALASKA_CONFIG.defaults.translateX, 
+                               translateY = ALASKA_CONFIG.defaults.translateY,
+                               scaleY = ALASKA_CONFIG.defaults.scaleY) => {
+  if (!geoJson || !geoJson.features) {
+    console.warn('transformAlaska: Invalid GeoJSON data provided');
+    return geoJson;
+  }
+  
+  // Deep clone the GeoJSON to avoid mutating the original
+  const result = JSON.parse(JSON.stringify(geoJson));
+  
+  // Count how many features are transformed
+  let alaskaCount = 0;
+  
+  // Process each feature
+  result.features = result.features.map(feature => {
+    // Check if this is an Alaska feature
+    const isAlaska = isAlaskaFeature(feature);
+    
+    if (isAlaska) {
+      // Transform Alaska
+      alaskaCount++;
+      
+      // Apply the transformation
+      feature = transformFeature(
+        feature, 
+        scale, 
+        ALASKA_CONFIG.referencePoint[0] + translateX, 
+        ALASKA_CONFIG.referencePoint[1] + translateY,
+        scaleY
+      );
+    }
+    
+    return feature;
+  });
+  
+  console.log(`Alaska transformation complete. Transformed ${alaskaCount} Alaska features.`);
+  return result;
+};
+
+// Utility function to programmatically control Alaska's transformation
+export const setAlaskaTransformation = (scale, translateX, translateY, scaleY) => {
+  // Find the hidden control elements
+  const scaleControl = document.querySelector('[data-alaska-control="scale"]');
+  const translateXControl = document.querySelector('[data-alaska-control="translateX"]');
+  const translateYControl = document.querySelector('[data-alaska-control="translateY"]');
+  const scaleYControl = document.querySelector('[data-alaska-control="scaleY"]');
+  
+  // Update the control values and dispatch change events
+  if (scaleControl) {
+    scaleControl.value = scale;
+    scaleControl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  if (translateXControl) {
+    translateXControl.value = translateX;
+    translateXControl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  if (translateYControl) {
+    translateYControl.value = translateY;
+    translateYControl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  if (scaleYControl) {
+    scaleYControl.value = scaleY;
+    scaleYControl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  return {
+    scale,
+    translateX,
+    translateY,
+    scaleY
+  };
 }; 
