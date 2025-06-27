@@ -1,14 +1,14 @@
-# v1.5.0 - Enhanced Map Interactions and UI Improvements
+# v1.5.0 - Map Bounds Implementation
 
 ## Major Changes
-- Improved map hover interactions for better user experience
-- Enhanced tooltip behavior for more responsive feedback
-- Refined styling for map elements
+- Added map bounds to restrict user dragging beyond geographic limits
+- Prevents users from navigating too far from the US map area
+- Implemented maxBoundsViscosity for strict boundary enforcement
 
 ## Frontend Changes
-- Updated hover state handling in MapComponent.js for smoother interactions
-- Enhanced tooltip styling and behavior in MapStyles.css
-- Optimized event handling for better performance
+- Added maxBounds property to MapContainer in MapComponent.js
+- Set coordinate bounds to keep focus on US territories
+- Added maxBoundsViscosity setting to ensure strict boundary adherence
 
 # v1.4.0 - Alaska Position Further Refinement
 

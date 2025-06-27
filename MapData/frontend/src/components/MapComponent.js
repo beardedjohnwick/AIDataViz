@@ -206,6 +206,13 @@ const MapComponent = ({ showCounties = true }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const mapRef = useRef(null);
   
+  // Define map bounds to restrict dragging
+  // These bounds restrict primarily the top-left direction while allowing more freedom in other directions
+  const maxBounds = [
+    [18, -150], // Southwest corner - higher latitude and less negative longitude to restrict top-left
+    [55, -50]   // Northeast corner - higher latitude and less negative longitude to allow more freedom in other directions
+  ];
+  
   // Hawaii transformation parameters
   const [hawaiiScale, setHawaiiScale] = useState(HAWAII_CONFIG.defaults.scale);
   const [hawaiiTranslateX, setHawaiiTranslateX] = useState(HAWAII_CONFIG.defaults.translateX);
@@ -502,6 +509,8 @@ const MapComponent = ({ showCounties = true }) => {
         center={[37, -98.5795]} // Center of the US, moved higher up
         zoom={5}
         minZoom={5}
+        maxBounds={maxBounds}
+        maxBoundsViscosity={1.0} // Prevents the user from dragging outside bounds (value between 0-1)
         style={{ height: '100vh', width: '100%' }}
         backgroundColor="#ffffff"
       >
