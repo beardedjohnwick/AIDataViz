@@ -116,6 +116,29 @@
   margin-left: 8px;
 }
 
+/* Section titles in control panel */
+.section-title {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 15px;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 5px;
+}
+
+/* Data controls container */
+.data-controls {
+  margin-top: 8px;
+}
+
+/* Data description text */
+.data-description {
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 10px;
+  margin-top: 0;
+}
+
 /* Map Container Styles */
 .map-container {
   flex-grow: 1;

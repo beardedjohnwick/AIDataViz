@@ -2,7 +2,7 @@ import React from 'react';
 import { GeoJSON, useMap } from 'react-leaflet';
 import './MapStyles.css';
 
-function StateLayers({ data, onStateSelected }) {
+function StateLayers({ data, onStateSelected, showAreaInTooltip }) {
   // Get access to the map instance
   const map = useMap();
 
@@ -25,7 +25,7 @@ function StateLayers({ data, onStateSelected }) {
     // Add tooltip with state name and area
     if (feature.properties) {
       const stateName = feature.properties.name || 'Unknown';
-      const areaContent = feature.properties.area_sq_miles !== undefined 
+      const areaContent = showAreaInTooltip && feature.properties.area_sq_miles !== undefined 
         ? `<br>Area: ${formatArea(feature.properties.area_sq_miles)} sq mi` 
         : '';
       
@@ -85,8 +85,10 @@ function StateLayers({ data, onStateSelected }) {
     return null;
   }
 
+  // Use key to force re-render when showAreaInTooltip changes
   return (
     <GeoJSON 
+      key={`states-${showAreaInTooltip}`}
       data={data} 
       style={stateStyle}
       onEachFeature={onEachFeature}

@@ -47,6 +47,7 @@ function MapComponent() {
   const [countySelected, setCountySelected] = useState(false);
   const [selectedCountyName, setSelectedCountyName] = useState(null);
   const [usingApi, setUsingApi] = useState(true);
+  const [showAreaInTooltip, setShowAreaInTooltip] = useState(true);
   
   // Reference to the map instance
   const mapRef = useRef(null);
@@ -61,6 +62,11 @@ function MapComponent() {
   // Toggle county visibility
   const handleCountyToggle = () => {
     setCountyToggle(!countyToggle);
+  };
+  
+  // Toggle area display in tooltip
+  const handleAreaToggle = () => {
+    setShowAreaInTooltip(!showAreaInTooltip);
   };
   
   // Handle state selection
@@ -237,6 +243,8 @@ function MapComponent() {
       <ControlPanel
         countyToggle={countyToggle}
         onCountyToggle={handleCountyToggle}
+        showAreaInTooltip={showAreaInTooltip}
+        onAreaToggle={handleAreaToggle}
       />
 
       {/* Map container */}
@@ -277,10 +285,18 @@ function MapComponent() {
           <MapController mapRef={mapRef} defaultCenter={center} defaultZoom={zoom} />
           
           {/* Render states using StateLayers component */}
-          {statesData && <StateLayers data={statesData} onStateSelected={handleStateSelected} />}
+          {statesData && <StateLayers 
+            data={statesData} 
+            onStateSelected={handleStateSelected}
+            showAreaInTooltip={showAreaInTooltip} 
+          />}
           
           {/* Render counties using CountyLayers component */}
-          {showCounties && countiesData && <CountyLayers data={countiesData} onCountySelected={handleCountySelected} />}
+          {showCounties && countiesData && <CountyLayers 
+            data={countiesData} 
+            onCountySelected={handleCountySelected}
+            showAreaInTooltip={showAreaInTooltip}
+          />}
         </MapContainer>
       </div>
     </div>

@@ -2,7 +2,7 @@ import React from 'react';
 import { GeoJSON, useMap } from 'react-leaflet';
 import './MapStyles.css';
 
-function CountyLayers({ data, onCountySelected }) {
+function CountyLayers({ data, onCountySelected, showAreaInTooltip }) {
   // Get access to the map instance
   const map = useMap();
 
@@ -25,7 +25,7 @@ function CountyLayers({ data, onCountySelected }) {
     // Add tooltip with county name and area
     if (feature.properties) {
       const countyName = feature.properties.name || 'Unknown';
-      const areaContent = feature.properties.area_sq_miles !== undefined 
+      const areaContent = showAreaInTooltip && feature.properties.area_sq_miles !== undefined 
         ? `<br>Area: ${formatArea(feature.properties.area_sq_miles)} sq mi` 
         : '';
       
@@ -85,8 +85,10 @@ function CountyLayers({ data, onCountySelected }) {
     return null;
   }
 
+  // Use key to force re-render when showAreaInTooltip changes
   return (
     <GeoJSON 
+      key={`counties-${showAreaInTooltip}`}
       data={data} 
       style={countyStyle}
       onEachFeature={onEachFeature}

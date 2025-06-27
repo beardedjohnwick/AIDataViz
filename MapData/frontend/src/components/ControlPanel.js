@@ -3,7 +3,9 @@ import './MapStyles.css';
 
 function ControlPanel({ 
   countyToggle, 
-  onCountyToggle
+  onCountyToggle,
+  showAreaInTooltip,
+  onAreaToggle
 }) {
   const [collapsed, setCollapsed] = useState(false);
   
@@ -34,6 +36,21 @@ function ControlPanel({
             />
             <span className="toggle-label">Show County Lines</span>
           </label>
+        </div>
+        
+        <div className="control-panel-section">
+          <h4 className="section-title">Data</h4>
+          <div className="data-controls">
+            <p className="data-description">Select data to display on the map</p>
+            <label className="control-toggle">
+              <input 
+                type="checkbox" 
+                checked={showAreaInTooltip} 
+                onChange={onAreaToggle} 
+              />
+              <span className="toggle-label">Land Area</span>
+            </label>
+          </div>
         </div>
       </div>
     </div>
