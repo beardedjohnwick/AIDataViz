@@ -18,10 +18,52 @@ import {
   ALASKA_CONFIG 
 } from '../data/geoUtils';
 
+// Component to handle zooming to a feature when clicked
+const ZoomToFeature = ({ featureRef, triggerZoom }) => {
+  const map = useMap();
+  
+  useEffect(() => {
+    if (featureRef.current) {
+      const bounds = featureRef.current.getBounds();
+      map.flyToBounds(bounds, {
+        padding: [50, 50], // Add some padding around the feature
+        duration: 0.8, // Animation duration in seconds
+        easeLinearity: 0.5 // Smooth transition
+      });
+    }
+  }, [map, featureRef, triggerZoom]);
+  
+  return null;
+};
+
+// Component to add a reset view button
+const ResetViewControl = ({ isZoomed, onResetView }) => {
+  const map = useMap();
+  
+  // Only show the button when the map is zoomed in
+  if (!isZoomed) return null;
+  
+  return (
+    <div className="leaflet-bottom leaflet-right">
+      <div className="leaflet-control leaflet-bar">
+        <button 
+          className="reset-view-button" 
+          title="Reset View"
+          onClick={onResetView}
+        >
+          Reset View
+        </button>
+      </div>
+    </div>
+  );
+};
+
 // Component to force re-render of GeoJSON when data changes
-const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties }) => {
+const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties, onFeatureSelected }) => {
   const map = useMap();
   const geoJsonLayerRef = useRef(null);
+  const selectedFeatureRef = useRef(null);
+  const [triggerZoom, setTriggerZoom] = useState(false);
   
   useEffect(() => {
     // Remove previous layer if it exists
@@ -81,6 +123,21 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties }) => {
               mouseout: (e) => {
                 const layer = e.target;
                 layer.setStyle(originalStyle);
+              },
+              // Add click handler to zoom to feature
+              click: (e) => {
+                // Prevent default behavior that causes the blue focus box
+                L.DomEvent.preventDefault(e);
+                L.DomEvent.stopPropagation(e);
+                
+                // Set the selected feature for zooming
+                selectedFeatureRef.current = layer;
+                setTriggerZoom(prev => !prev); // Toggle to trigger re-render
+                
+                // Notify parent that a feature was selected
+                if (onFeatureSelected) {
+                  onFeatureSelected(true);
+                }
               }
             });
           }
@@ -100,6 +157,21 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties }) => {
               mouseout: (e) => {
                 const layer = e.target;
                 layer.setStyle(originalStyle);
+              },
+              // Add click handler to zoom to feature
+              click: (e) => {
+                // Prevent default behavior that causes the blue focus box
+                L.DomEvent.preventDefault(e);
+                L.DomEvent.stopPropagation(e);
+                
+                // Set the selected feature for zooming
+                selectedFeatureRef.current = layer;
+                setTriggerZoom(prev => !prev); // Toggle to trigger re-render
+                
+                // Notify parent that a feature was selected
+                if (onFeatureSelected) {
+                  onFeatureSelected(true);
+                }
               }
             });
           }
@@ -117,9 +189,9 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties }) => {
         geoJsonLayerRef.current.removeFrom(map);
       }
     };
-  }, [map, data, style, zIndex, showCounties]);
+  }, [map, data, style, zIndex, showCounties, onFeatureSelected]);
   
-  return null;
+  return <ZoomToFeature featureRef={selectedFeatureRef} triggerZoom={triggerZoom} />;
 };
 
 /**
@@ -131,6 +203,8 @@ const MapComponent = ({ showCounties = true }) => {
   const [statesLoading, setStatesLoading] = useState(true);
   const [countiesLoading, setCountiesLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const mapRef = useRef(null);
   
   // Hawaii transformation parameters
   const [hawaiiScale, setHawaiiScale] = useState(HAWAII_CONFIG.defaults.scale);
@@ -161,6 +235,30 @@ const MapComponent = ({ showCounties = true }) => {
     translateX: alaskaTranslateX,
     translateY: alaskaTranslateY
   });
+
+  // Handle feature selection
+  const handleFeatureSelected = (selected) => {
+    setIsZoomed(selected);
+  };
+  
+  // Reset view to default
+  const handleResetView = () => {
+    if (mapRef.current) {
+      mapRef.current.setView([37, -98.5795], 5);
+      setIsZoomed(false);
+    }
+  };
+  
+  // Component to access the map instance
+  const MapController = () => {
+    const map = useMap();
+    
+    useEffect(() => {
+      mapRef.current = map;
+    }, [map]);
+    
+    return null;
+  };
 
   // Fix Leaflet's icon paths which can cause issues in React
   useEffect(() => {
@@ -401,11 +499,13 @@ const MapComponent = ({ showCounties = true }) => {
       {error && <div className="map-error">{error}</div>}
       
       <MapContainer 
-        center={[39.8283, -98.5795]} // Center of the US
-        zoom={4}
+        center={[37, -98.5795]} // Center of the US, moved higher up
+        zoom={5}
+        minZoom={5}
         style={{ height: '100vh', width: '100%' }}
         backgroundColor="#ffffff"
       >
+        <MapController />
         <TileLayer
           url="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
           attribution=""
@@ -416,6 +516,7 @@ const MapComponent = ({ showCounties = true }) => {
             style={countyStyle}
             zIndex={1}
             showCounties={showCounties}
+            onFeatureSelected={handleFeatureSelected}
           />
         )}
         {transformedStateData && (
@@ -424,8 +525,13 @@ const MapComponent = ({ showCounties = true }) => {
             style={stateStyle}
             zIndex={2}
             showCounties={showCounties}
+            onFeatureSelected={handleFeatureSelected}
           />
         )}
+        <ResetViewControl 
+          isZoomed={isZoomed} 
+          onResetView={handleResetView} 
+        />
       </MapContainer>
       
       {/* Hawaii transformation controls - hidden from UI but available for programmatic control */}

@@ -29,6 +29,29 @@
   top: 50px; /* Position below other notifications */
 }
 
+/* Reset view button styles */
+.reset-view-button {
+  background-color: white;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s ease;
+}
+
+.reset-view-button:hover {
+  background-color: #f4f4f4;
+}
+
+.reset-view-button:active {
+  background-color: #e6e6e6;
+  transform: translateY(1px);
+}
+
 /* Tooltip styles for map features */
 .state-tooltip, .county-tooltip {
   background-color: rgba(255, 255, 255, 0.9);
@@ -56,6 +79,24 @@
 /* Ensure map has white background */
 .leaflet-container {
   background-color: #ffffff !important;
+}
+
+/* Smooth zoom transitions */
+.leaflet-fade-anim .leaflet-tile,
+.leaflet-zoom-anim .leaflet-zoom-animated {
+  will-change: transform;
+  transition: transform 0.25s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+}
+
+/* Remove focus outline from map features */
+.leaflet-interactive {
+  outline: none !important;
+}
+
+/* Remove focus styling from SVG elements */
+path:focus {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* State hover styles */

@@ -8,7 +8,7 @@ import testHawaiiTransformation from './data/testHawaiiTransform';
 import { HAWAII_CONFIG, ALASKA_CONFIG } from './data/geoUtils';
 
 function App() {
-  const [showCounties, setShowCounties] = useState(true);
+  const [showCounties, setShowCounties] = useState(false);
   const [showAreaInTooltip, setShowAreaInTooltip] = useState(false);
   
   // Hawaii transformation settings

@@ -1,3 +1,15 @@
+# v1.5.0 - Enhanced Map Interactions and UI Improvements
+
+## Major Changes
+- Improved map hover interactions for better user experience
+- Enhanced tooltip behavior for more responsive feedback
+- Refined styling for map elements
+
+## Frontend Changes
+- Updated hover state handling in MapComponent.js for smoother interactions
+- Enhanced tooltip styling and behavior in MapStyles.css
+- Optimized event handling for better performance
+
 # v1.4.0 - Alaska Position Further Refinement
 
 ## Major Changes
