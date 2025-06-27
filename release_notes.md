@@ -1,3 +1,21 @@
+# v1.5.3 - Map Bounds and Mahnomen County Fix
+
+## Major Changes
+- Added map bounds to restrict user dragging beyond geographic limits
+- Fixed issue with Mahnomen County, Minnesota being incorrectly transformed
+- Added special handling to ensure Mahnomen County stays in its correct geographic position
+- Implemented isMahnomenCounty helper function to identify the county by ID or name
+- Prevents users from navigating too far from the US map area
+- Implemented maxBoundsViscosity for strict boundary enforcement
+
+## Frontend Changes
+- Added maxBounds property to MapContainer in MapComponent.js
+- Set coordinate bounds to keep focus on US territories
+- Added maxBoundsViscosity setting to ensure strict boundary adherence
+- Added isMahnomenCounty function in geoUtils.js
+- Updated transformation functions to skip Mahnomen County
+- Enhanced repositionAlaskaHawaii, transformHawaii, and transformAlaska functions to preserve Mahnomen County's position
+
 # v1.5.2 - Mahnomen Fix
 
 ## Major Changes
