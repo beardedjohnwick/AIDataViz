@@ -19,12 +19,19 @@ function App() {
   const [alaskaTranslateX, setAlaskaTranslateX] = useState(ALASKA_CONFIG.defaults.translateX);
   const [alaskaTranslateY, setAlaskaTranslateY] = useState(ALASKA_CONFIG.defaults.translateY);
 
+  // State to track if control panel is collapsed
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+
   const handleCountyToggle = () => {
     setShowCounties(!showCounties);
   };
 
   const handleAreaToggle = () => {
     setShowAreaInTooltip(!showAreaInTooltip);
+  };
+  
+  const handlePanelCollapseChange = (isCollapsed) => {
+    setIsPanelCollapsed(isCollapsed);
   };
   
   // Handler for Hawaii scale change
@@ -135,13 +142,14 @@ function App() {
   }, [hawaiiScale, hawaiiTranslateX, hawaiiTranslateY, alaskaScale, alaskaScaleY, alaskaTranslateX, alaskaTranslateY, showCounties]);
   
   return (
-    <div className="App" style={{ height: '100vh', width: '100%', overflow: 'hidden' }}>
+    <div className="App" style={{ height: '100vh', width: '100%', overflow: 'hidden', position: 'relative' }}>
       <MapComponent showCounties={showCounties} />
       <ControlPanel
         countyToggle={showCounties}
         onCountyToggle={handleCountyToggle}
         showAreaInTooltip={showAreaInTooltip}
         onAreaToggle={handleAreaToggle}
+        onCollapseChange={handlePanelCollapseChange}
       />
       
       {/* Hidden Hawaii transformation controls - for debugging only */}

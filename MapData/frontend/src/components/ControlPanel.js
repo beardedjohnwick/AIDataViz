@@ -1,29 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './MapStyles.css';
 
 function ControlPanel({ 
   countyToggle, 
   onCountyToggle,
   showAreaInTooltip,
-  onAreaToggle
+  onAreaToggle,
+  onCollapseChange
 }) {
   const [collapsed, setCollapsed] = useState(false);
   
   const togglePanel = () => {
-    setCollapsed(!collapsed);
+    const newCollapsedState = !collapsed;
+    setCollapsed(newCollapsedState);
+    if (onCollapseChange) {
+      onCollapseChange(newCollapsedState);
+    }
   };
 
   return (
     <div className={`control-panel ${collapsed ? 'collapsed' : ''}`}>
       <div className="control-panel-header">
-        <h3 className="control-panel-title">Map Controls</h3>
         <button 
           className="panel-toggle-button"
           onClick={togglePanel}
           aria-label={collapsed ? "Expand panel" : "Collapse panel"}
         >
-          {collapsed ? '→' : '←'}
+          {collapsed ? '←' : '→'}
         </button>
+        <h3 className="control-panel-title">Map Controls</h3>
       </div>
       
       <div className="control-panel-content">

@@ -40,9 +40,7 @@ const ZoomToFeature = ({ featureRef, triggerZoom }) => {
 const ResetViewControl = ({ isZoomed, onResetView }) => {
   const map = useMap();
   
-  // Only show the button when the map is zoomed in
-  if (!isZoomed) return null;
-  
+  // Always show the reset button regardless of zoom state
   return (
     <div className="leaflet-bottom leaflet-right">
       <div className="leaflet-control leaflet-bar">
@@ -265,6 +263,23 @@ const MapComponent = ({ showCounties = true }) => {
       
       // Make the map instance available globally for debugging
       window.leafletMap = map;
+      
+      // Helper function to close all tooltips
+      const closeAllTooltips = () => {
+        map.eachLayer((layer) => {
+          if (layer.getTooltip) {
+            const tooltip = layer.getTooltip();
+            if (tooltip) {
+              layer.closeTooltip();
+            }
+          }
+        });
+      };
+      
+      // Add event handlers to close all tooltips when dragging starts or on mousedown/touch
+      map.on('dragstart', closeAllTooltips);
+      map.on('mousedown', closeAllTooltips);
+      map.on('touchstart', closeAllTooltips);
       
       // Add a function to find and zoom to Mahnomen County
       window.findMahnomen = () => {
