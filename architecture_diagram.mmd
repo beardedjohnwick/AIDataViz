@@ -1,0 +1,24 @@
+graph TD;
+    A[Frontend React Client] -->|API Requests| B[FastAPI Backend]
+    B -->|Queries| C[PostgreSQL/PostGIS]
+    B -->|Returns Data| A
+    
+    subgraph "Frontend"
+    A --> D[Map Components]
+    A --> E[UI Components]
+    D --> F[Leaflet Map]
+    D --> G[Map Controls]
+    D --> H[Data Visualization]
+    end
+    
+    subgraph "Backend"
+    B --> I[Route Handlers]
+    I --> J[Service Layer]
+    J --> K[Data Access Layer]
+    K --> C
+    end
+    
+    subgraph "Database"
+    C --> L[Spatial Data]
+    C --> M[Statistical Data]
+    end 
