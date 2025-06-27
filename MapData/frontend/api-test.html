@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            white-space: pre-wrap;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Test Page</h1>
+    <p>This page tests the connection to the geographic data API.</p>
+    
+    <button id="testButton">Test API Connection</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        // API endpoint URL
+        const API_URL = 'http://localhost:8000/api/v1/geographic/states';
+        const resultsDiv = document.getElementById('results');
+        
+        function log(message, isError = false) {
+            const className = isError ? 'error' : 'success';
+            resultsDiv.innerHTML += `<div class="${className}">${message}</div>`;
+        }
+        
+        async function testApi() {
+            resultsDiv.innerHTML = ''; // Clear previous results
+            log('Testing API connection...');
+            
+            try {
+                // Make a request to the API with include_geometry=true
+                const response = await fetch(`${API_URL}?include_geometry=true`);
+                
+                // Check if the request was successful
+                if (response.ok) {
+                    log(`✅ API request successful (status code: ${response.status})`);
+                    
+                    // Parse the JSON response
+                    const data = await response.json();
+                    
+                    // Check if the response is a valid GeoJSON FeatureCollection
+                    if (data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+                        log(`✅ Response is a valid GeoJSON FeatureCollection with ${data.features.length} features`);
+                        
+                        // Check if we have features
+                        if (data.features.length > 0) {
+                            // Check the first feature
+                            const firstFeature = data.features[0];
+                            
+                            // Check if the feature has properties and geometry
+                            if (firstFeature.properties && firstFeature.geometry) {
+                                log('✅ Features have properties and geometry');
+                                
+                                // Check if area_sq_miles is in properties
+                                if ('area_sq_miles' in firstFeature.properties) {
+                                    const area = firstFeature.properties.area_sq_miles;
+                                    const name = firstFeature.properties.name;
+                                    log(`✅ area_sq_miles found in properties: ${name} = ${area} sq miles`);
+                                } else {
+                                    log('❌ area_sq_miles not found in properties', true);
+                                }
+                                
+                                // Print a sample of the properties
+                                log('\nSample properties from first feature:');
+                                Object.entries(firstFeature.properties).forEach(([key, value]) => {
+                                    log(`  - ${key}: ${value}`);
+                                });
+                            } else {
+                                log('❌ Features missing properties or geometry', true);
+                            }
+                        } else {
+                            log('❌ No features found in the response', true);
+                        }
+                    } else {
+                        log('❌ Response is not a valid GeoJSON FeatureCollection', true);
+                        log(`Actual response type: ${data.type || 'unknown'}`, true);
+                    }
+                } else {
+                    log(`❌ API request failed with status code: ${response.status}`, true);
+                    log(`Response: ${await response.text()}`, true);
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, true);
+                log('Make sure the FastAPI server is running on port 8000', true);
+            }
+        }
+        
+        // Add event listener to the button
+        document.getElementById('testButton').addEventListener('click', testApi);
+    </script>
+</body>
+</html> 

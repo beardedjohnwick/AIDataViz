@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
-// Import TopoJSON data
+// Import TopoJSON data (as fallback)
 import statesTopoJSON from '../data/us-states.json';
 import countiesTopoJSON from '../data/us-counties.json';
 // Import conversion utilities
 import { convertTopoToGeoStates, convertTopoToGeoCounties } from '../data/geoUtils';
+// Import API service
+import { geoDataService } from '../data/apiService';
 // Import layer components
 import StateLayers from './StateLayers';
 import CountyLayers from './CountyLayers';
@@ -44,6 +46,7 @@ function MapComponent() {
   const [selectedStateName, setSelectedStateName] = useState(null);
   const [countySelected, setCountySelected] = useState(false);
   const [selectedCountyName, setSelectedCountyName] = useState(null);
+  const [usingApi, setUsingApi] = useState(true);
   
   // Reference to the map instance
   const mapRef = useRef(null);
@@ -86,28 +89,146 @@ function MapComponent() {
     }
   };
 
-  useEffect(() => {
-    try {
-      // Convert TopoJSON to GeoJSON
-      const statesGeoJSON = convertTopoToGeoStates(statesTopoJSON);
-      const countiesGeoJSON = convertTopoToGeoCounties(countiesTopoJSON);
-      
-      setStatesData(statesGeoJSON);
-      setCountiesData(countiesGeoJSON);
-      setLoading(false);
-    } catch (err) {
-      setError('Failed to process map data');
-      console.error('Error processing map data:', err);
-      setLoading(false);
+  // Function to validate GeoJSON data
+  const validateGeoJSON = (data) => {
+    if (!data || !data.type || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
+      console.error('Invalid GeoJSON data structure:', data);
+      return false;
     }
-  }, []);
+    
+    // Check if features have properties and geometry
+    if (data.features.length === 0) {
+      console.error('GeoJSON has no features');
+      return false;
+    }
+    
+    for (const feature of data.features) {
+      if (!feature.properties || !feature.geometry) {
+        console.error('Feature missing properties or geometry:', feature);
+        return false;
+      }
+    }
+    
+    return true;
+  };
+
+  // Check API health before loading data
+  const checkApiHealth = async () => {
+    try {
+      const isHealthy = await geoDataService.checkHealth();
+      return isHealthy;
+    } catch (error) {
+      console.error('API health check failed:', error);
+      return false;
+    }
+  };
+
+  // Load data from API or fallback to static files
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // First check if API is healthy
+        const isApiHealthy = await checkApiHealth();
+        
+        if (!isApiHealthy) {
+          console.warn('API health check failed, falling back to static files');
+          throw new Error('API health check failed');
+        }
+        
+        console.log('Attempting to fetch data from API...');
+        // Try to fetch data from API
+        const statesResponse = await geoDataService.getStates(true);
+        console.log('States data from API:', statesResponse);
+        
+        // Validate the GeoJSON data
+        if (validateGeoJSON(statesResponse)) {
+          setStatesData(statesResponse);
+          
+          // Only fetch counties if needed (to save bandwidth)
+          if (countyToggle) {
+            console.log('Fetching counties data from API...');
+            const countiesResponse = await geoDataService.getCounties(true);
+            console.log('Counties data from API:', countiesResponse);
+            
+            if (validateGeoJSON(countiesResponse)) {
+              setCountiesData(countiesResponse);
+            } else {
+              throw new Error('Invalid counties GeoJSON data');
+            }
+          }
+          
+          setUsingApi(true);
+          setLoading(false);
+        } else {
+          throw new Error('Invalid states GeoJSON data');
+        }
+      } catch (apiError) {
+        console.warn('Failed to fetch data from API, falling back to static files:', apiError);
+        
+        try {
+          // Fallback to static files
+          const statesGeoJSON = convertTopoToGeoStates(statesTopoJSON);
+          const countiesGeoJSON = convertTopoToGeoCounties(countiesTopoJSON);
+          
+          setStatesData(statesGeoJSON);
+          setCountiesData(countiesGeoJSON);
+          setUsingApi(false);
+          setLoading(false);
+        } catch (fallbackError) {
+          setError('Failed to process map data');
+          console.error('Error processing map data:', fallbackError);
+          setLoading(false);
+        }
+      }
+    };
+    
+    loadData();
+  }, []); // Only run on mount, not when countyToggle changes
+
+  // Load counties data when toggle is switched on
+  useEffect(() => {
+    const loadCountiesData = async () => {
+      if (countyToggle && !countiesData && usingApi) {
+        try {
+          setLoading(true);
+          console.log('Fetching counties data after toggle...');
+          const countiesResponse = await geoDataService.getCounties(true);
+          console.log('Counties data from API after toggle:', countiesResponse);
+          
+          if (validateGeoJSON(countiesResponse)) {
+            setCountiesData(countiesResponse);
+          } else {
+            throw new Error('Invalid counties GeoJSON data');
+          }
+        } catch (error) {
+          console.error('Error fetching counties data:', error);
+          
+          // Fallback to static files if API fails
+          try {
+            const countiesGeoJSON = convertTopoToGeoCounties(countiesTopoJSON);
+            setCountiesData(countiesGeoJSON);
+            setUsingApi(false);
+          } catch (fallbackError) {
+            setError('Failed to load counties data');
+          }
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+    
+    loadCountiesData();
+  }, [countyToggle, countiesData, usingApi]);
 
   if (loading) {
-    return <div>Loading map data...</div>;
+    return <div className="loading-indicator">Loading map data...</div>;
   }
 
   if (error) {
-    return <div>Error: {error}</div>;
+    return <div className="error-message">Error: {error}</div>;
   }
 
   return (
@@ -132,6 +253,13 @@ function MapComponent() {
           </div>
         )}
         
+        {/* Data source indicator */}
+        <div className="data-source-indicator">
+          {usingApi 
+            ? 'Using API data (Live database connection)' 
+            : 'Using static data with mock area values (API unavailable)'}
+        </div>
+        
         <MapContainer
           center={center}
           zoom={zoom}
@@ -142,17 +270,17 @@ function MapComponent() {
           dragging={true}
           minZoom={5}
         >
+          {/* Zoom handler component */}
+          <ZoomHandler setZoomLevel={setZoomLevel} />
+          
+          {/* Map controller component */}
+          <MapController mapRef={mapRef} defaultCenter={center} defaultZoom={zoom} />
+          
           {/* Render states using StateLayers component */}
           {statesData && <StateLayers data={statesData} onStateSelected={handleStateSelected} />}
           
           {/* Render counties using CountyLayers component */}
           {showCounties && countiesData && <CountyLayers data={countiesData} onCountySelected={handleCountySelected} />}
-          
-          {/* Component to handle zoom events */}
-          <ZoomHandler setZoomLevel={setZoomLevel} />
-          
-          {/* Component to handle map reference */}
-          <MapController mapRef={mapRef} defaultCenter={center} defaultZoom={zoom} />
         </MapContainer>
       </div>
     </div>

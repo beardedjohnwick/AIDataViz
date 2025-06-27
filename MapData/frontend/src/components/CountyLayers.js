@@ -14,17 +14,34 @@ function CountyLayers({ data, onCountySelected }) {
     fillOpacity: 0
   };
 
+  // Function to format area with commas and round to 2 decimal places
+  const formatArea = (area) => {
+    if (area === undefined || area === null) return 'N/A';
+    return area.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  };
+
   // Function to handle hover events
   const onEachFeature = (feature, layer) => {
-    // Add tooltip with county name
-    if (feature.properties && feature.properties.name) {
-      layer.bindTooltip(feature.properties.name, {
-        permanent: false,
-        direction: 'auto',
-        className: 'county-tooltip',
-        sticky: true, // Makes tooltip follow the mouse
-        offset: [10, 0] // Small offset from cursor
-      });
+    // Add tooltip with county name and area
+    if (feature.properties) {
+      const countyName = feature.properties.name || 'Unknown';
+      const areaContent = feature.properties.area_sq_miles !== undefined 
+        ? `<br>Area: ${formatArea(feature.properties.area_sq_miles)} sq mi` 
+        : '';
+      
+      layer.bindTooltip(
+        `<div class="custom-tooltip">
+          <strong>${countyName}</strong>
+          ${areaContent}
+        </div>`, 
+        {
+          permanent: false,
+          direction: 'auto',
+          className: 'county-tooltip',
+          sticky: true, // Makes tooltip follow the mouse
+          offset: [10, 0] // Small offset from cursor
+        }
+      );
     }
     
     layer.on({

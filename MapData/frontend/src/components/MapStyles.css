@@ -45,15 +45,61 @@
   height: 100%;
   flex-shrink: 0;
   border-right: 1px solid #e0e0e0;
+  transition: width 0.3s ease, padding 0.3s ease;
+  position: relative;
+}
+
+/* Collapsed Control Panel */
+.control-panel.collapsed {
+  width: 40px;
+  padding: 15px 5px;
+  overflow: hidden;
+}
+
+.control-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.control-panel.collapsed .control-panel-content {
+  display: none;
+}
+
+.control-panel.collapsed .control-panel-title {
+  display: none;
+}
+
+.panel-toggle-button {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  padding: 0;
+  transition: background-color 0.2s;
+}
+
+.panel-toggle-button:hover {
+  background-color: #e0e0e0;
+}
+
+.control-panel.collapsed .panel-toggle-button {
+  margin: 0 auto;
 }
 
 .control-panel-title {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 0;
   font-size: 16px;
   color: #333;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 8px;
+  flex-grow: 1;
 }
 
 .control-panel-section {
@@ -103,4 +149,42 @@
 
 .reset-button:active {
   transform: scale(0.98);
+}
+
+/* Tooltip styles */
+.state-tooltip {
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.custom-tooltip {
+  line-height: 1.4;
+}
+
+.custom-tooltip strong {
+  font-weight: bold;
+  font-size: 13px;
+}
+
+/* Data source indicator */
+.data-source-indicator {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  z-index: 1000;
+  border: 1px solid #ddd;
+  color: #333;
+  font-weight: 500;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
+  max-width: 250px;
+  text-align: center;
 } 

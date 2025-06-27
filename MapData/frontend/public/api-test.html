@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Connection Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+    }
+    button {
+      padding: 10px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #results {
+      background-color: #f8f8f8;
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>API Connection Test</h1>
+  <button id="testButton">Test API Connection</button>
+  <div id="results">Results will appear here...</div>
+
+  <script>
+    document.getElementById('testButton').addEventListener('click', testApi);
+
+    async function testApi() {
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.textContent = 'Testing API connection...\n';
+      
+      try {
+        // Test health endpoint
+        resultsDiv.textContent += '\nTesting health endpoint...\n';
+        const healthResponse = await fetch('http://localhost:8000/api/v1/geographic/health');
+        const healthData = await healthResponse.json();
+        resultsDiv.textContent += `Health endpoint status: ${healthResponse.status}\n`;
+        resultsDiv.textContent += `Health endpoint data: ${JSON.stringify(healthData)}\n`;
+        
+        // Test states endpoint without geometry
+        resultsDiv.textContent += '\nTesting states endpoint without geometry...\n';
+        const statesResponse = await fetch('http://localhost:8000/api/v1/geographic/states?include_geometry=false');
+        const statesData = await statesResponse.json();
+        resultsDiv.textContent += `States endpoint status: ${statesResponse.status}\n`;
+        resultsDiv.textContent += `States count: ${statesData.features.length}\n`;
+        
+        // Check if states have area_sq_miles
+        const sampleState = statesData.features[0];
+        resultsDiv.textContent += `Sample state: ${sampleState.properties.name}\n`;
+        resultsDiv.textContent += `Sample state area: ${sampleState.properties.area_sq_miles || 'Not found'}\n`;
+        
+        // Test states endpoint with geometry
+        resultsDiv.textContent += '\nTesting states endpoint with geometry...\n';
+        const statesGeoResponse = await fetch('http://localhost:8000/api/v1/geographic/states?include_geometry=true');
+        const statesGeoData = await statesGeoResponse.json();
+        resultsDiv.textContent += `States with geometry endpoint status: ${statesGeoResponse.status}\n`;
+        resultsDiv.textContent += `States with geometry count: ${statesGeoData.features.length}\n`;
+        
+        // Check if states have geometry
+        const sampleStateGeo = statesGeoData.features[0];
+        const hasGeometry = sampleStateGeo.geometry.type !== 'Point' || (
+          sampleStateGeo.geometry.coordinates[0] !== 0 && 
+          sampleStateGeo.geometry.coordinates[1] !== 0
+        );
+        resultsDiv.textContent += `Sample state geometry type: ${sampleStateGeo.geometry.type}\n`;
+        resultsDiv.textContent += `Has valid geometry: ${hasGeometry}\n`;
+        
+        resultsDiv.textContent += '\nAPI tests completed successfully';
+      } catch (error) {
+        resultsDiv.textContent += `\nError testing API: ${error.message}\n`;
+        console.error('Error testing API:', error);
+      }
+    }
+  </script>
+</body>
+</html> 

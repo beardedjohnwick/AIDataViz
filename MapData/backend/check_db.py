@@ -1,86 +1,79 @@
-from sqlalchemy import create_engine, text
-import json
+import sys
+from sqlalchemy import text
+from database import engine, get_db
+from models.geographic import State
 
-# The connection string from Neon
-CONNECTION_STRING = "postgresql://aidataviz_owner:npg_jQRrEC5dpq3o@ep-green-darkness-a8385q84-pooler.eastus2.azure.neon.tech/aidataviz?sslmode=require&channel_binding=require"
-
-def check_database():
-    """Check the database contents."""
+def check_database_connection():
+    """Check if the database connection is working."""
     try:
-        # Create SQLAlchemy engine
-        engine = create_engine(CONNECTION_STRING)
-        
-        # Try to connect and execute queries
+        # Try to connect to the database
         with engine.connect() as connection:
-            # Check states count
-            states_result = connection.execute(text("SELECT COUNT(*) FROM states")).fetchone()
-            states_count = states_result[0] if states_result else 0
-            print(f"Number of states in database: {states_count}")
-            
-            if states_count > 0:
-                # Get sample states
-                states = connection.execute(text("""
-                    SELECT name, abbreviation, fips_code 
-                    FROM states 
-                    ORDER BY name 
-                    LIMIT 5
-                """)).fetchall()
-                
-                print("\nSample states:")
-                for state in states:
-                    print(f"- {state[0]} ({state[1]}), FIPS: {state[2]}")
-                
-                # Get states with most counties
-                states_with_counties = connection.execute(text("""
-                    SELECT s.name, COUNT(c.id) as county_count
-                    FROM states s
-                    LEFT JOIN counties c ON s.id = c.state_id
-                    GROUP BY s.name
-                    ORDER BY county_count DESC
-                    LIMIT 5
-                """)).fetchall()
-                
-                print("\nStates with most counties:")
-                for state in states_with_counties:
-                    print(f"- {state[0]}: {state[1]} counties")
-            
-            # Check counties count
-            counties_result = connection.execute(text("SELECT COUNT(*) FROM counties")).fetchone()
-            counties_count = counties_result[0] if counties_result else 0
-            print(f"\nNumber of counties in database: {counties_count}")
-            
-            if counties_count > 0:
-                # Get sample counties
-                counties = connection.execute(text("""
-                    SELECT c.name, s.name as state_name, c.fips_code
-                    FROM counties c
-                    JOIN states s ON c.state_id = s.id
-                    ORDER BY s.name, c.name
-                    LIMIT 10
-                """)).fetchall()
-                
-                print("\nSample counties:")
-                for county in counties:
-                    print(f"- {county[0]}, {county[1]}, FIPS: {county[2]}")
-                
-                # Get counties with largest area
-                large_counties = connection.execute(text("""
-                    SELECT c.name, s.name as state_name, c.area_sq_miles
-                    FROM counties c
-                    JOIN states s ON c.state_id = s.id
-                    ORDER BY c.area_sq_miles DESC NULLS LAST
-                    LIMIT 5
-                """)).fetchall()
-                
-                print("\nLargest counties by area:")
-                for county in large_counties:
-                    area = county[2] if county[2] else "Unknown"
-                    print(f"- {county[0]}, {county[1]}: {area} sq miles")
+            result = connection.execute(text("SELECT 1"))
+            print("✅ Database connection successful!")
+            return True
+    except Exception as e:
+        print("❌ Database connection failed!")
+        print(f"Error: {e}")
+        return False
+
+def check_postgis():
+    """Check if PostGIS extension is enabled."""
+    try:
+        with engine.connect() as connection:
+            result = connection.execute(text("SELECT PostGIS_version()"))
+            version = result.scalar()
+            print(f"✅ PostGIS is enabled (version: {version})")
+            return True
+    except Exception as e:
+        print("❌ PostGIS check failed!")
+        print(f"Error: {e}")
+        return False
+
+def check_tables():
+    """Check if the required tables exist and have data."""
+    try:
+        db = next(get_db())
+        
+        # Check states table
+        states_count = db.query(State).count()
+        print(f"✅ States table exists with {states_count} records")
+        
+        # If we have states, check one record for area_sq_miles
+        if states_count > 0:
+            sample_state = db.query(State).first()
+            if sample_state is not None:
+                state_name = sample_state.name if hasattr(sample_state, 'name') else "Unknown"
+                if hasattr(sample_state, 'area_sq_miles') and sample_state.area_sq_miles is not None:
+                    print(f"✅ Sample state '{state_name}' has area_sq_miles: {sample_state.area_sq_miles}")
+                else:
+                    print(f"⚠️  Sample state '{state_name}' does not have area_sq_miles data")
+            else:
+                print("⚠️  Could not retrieve a sample state record")
         
         return True
     except Exception as e:
-        print(f"Error checking database: {e}")
+        print("❌ Table check failed!")
+        print(f"Error: {e}")
         return False
 
 if __name__ == "__main__":
-    check_database() 
+    print("Checking database configuration...")
+    
+    connection_ok = check_database_connection()
+    if not connection_ok:
+        print("\nPlease check your database configuration in the .env file.")
+        sys.exit(1)
+    
+    postgis_ok = check_postgis()
+    if not postgis_ok:
+        print("\nPostGIS extension is not enabled. Run 'python enable_postgis.py' to enable it.")
+    
+    tables_ok = check_tables()
+    if not tables_ok:
+        print("\nTables check failed. Make sure you've run the data ingestion scripts.")
+    
+    if connection_ok and postgis_ok and tables_ok:
+        print("\n✅ All checks passed! The database is properly configured.")
+        print("You can now start the FastAPI server with 'uvicorn app:app --reload'")
+    else:
+        print("\n⚠️  Some checks failed. Please fix the issues before starting the server.") 

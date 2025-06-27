@@ -12,6 +12,18 @@ The MapData application follows a three-tier architecture:
 2. **Backend**: FastAPI (Python) for API endpoints
 3. **Database**: PostgreSQL with PostGIS extension for spatial data
 
+## Features
+
+### Geographic Data Visualization
+- Interactive map with state and county boundaries
+- Hover tooltips displaying geographic information including area in square miles
+- Zoom and pan functionality for exploring different regions
+
+### Database Integration
+- Integration with Neon PostgreSQL database for dynamic data retrieval
+- Automatic fallback to static data if API is unavailable
+- See [MapData/backend/NEON_INTEGRATION.md](MapData/backend/NEON_INTEGRATION.md) for setup instructions
+
 ## Standards Documentation
 
 This repository contains the following standards documents:
