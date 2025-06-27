@@ -1,4 +1,4 @@
-# MapData Project Coding Standards
+# AIDataViz - MapData Project Coding Standards
 
 This repository contains the coding standards and best practices for the MapData project, a full-stack application for visualizing geographic and statistical data on US maps.
 
