@@ -262,7 +262,72 @@ const MapComponent = ({ showCounties = true }) => {
     
     useEffect(() => {
       mapRef.current = map;
-    }, [map]);
+      
+      // Make the map instance available globally for debugging
+      window.leafletMap = map;
+      
+      // Add a function to find and zoom to Mahnomen County
+      window.findMahnomen = () => {
+        if (transformedCountyData) {
+          const mahnomenCounty = transformedCountyData.features.find(feature => 
+            feature.id === "27087" || 
+            (feature.properties && feature.properties.name === "Mahnomen")
+          );
+          
+          if (mahnomenCounty && mahnomenCounty.geometry) {
+            console.log("Zooming to Mahnomen County:", mahnomenCounty);
+            
+            // Create a GeoJSON layer for this county
+            const layer = L.geoJSON({
+              type: "Feature",
+              geometry: mahnomenCounty.geometry,
+              properties: mahnomenCounty.properties
+            });
+            
+            // Try to zoom to its bounds
+            try {
+              const bounds = layer.getBounds();
+              console.log("Mahnomen County bounds:", bounds);
+              
+              // Check if bounds are valid (in Minnesota)
+              const center = bounds.getCenter();
+              const isInMinnesota = center.lng > -97.5 && center.lng < -89.0 && 
+                                   center.lat > 43.0 && center.lat < 49.5;
+              
+              if (isInMinnesota) {
+                map.fitBounds(bounds, {
+                  padding: [50, 50],
+                  maxZoom: 10
+                });
+              } else {
+                console.log("Mahnomen County bounds not in Minnesota, using fallback");
+                // Mahnomen County, MN coordinates (approximate)
+                map.setView([47.3252, -95.8020], 10);
+              }
+            } catch (err) {
+              console.error("Error getting bounds for Mahnomen County:", err);
+              
+              // Fallback: Zoom to Mahnomen County, MN
+              map.setView([47.3252, -95.8020], 10);
+            }
+          } else {
+            console.error("Mahnomen County not found in transformed data");
+            // Fallback: Zoom to Mahnomen County, MN
+            map.setView([47.3252, -95.8020], 10);
+          }
+        } else {
+          // Fallback: Zoom to Mahnomen County, MN
+          map.setView([47.3252, -95.8020], 10);
+        }
+      };
+      
+      // Expose a function to check the bounds of the map
+      window.checkMapBounds = () => {
+        const bounds = map.getBounds();
+        console.log("Current map bounds:", bounds);
+      };
+      
+    }, [map, transformedCountyData]);
     
     return null;
   };
@@ -405,6 +470,65 @@ const MapComponent = ({ showCounties = true }) => {
         // Convert TopoJSON to GeoJSON using the 'counties' object
         const geoJson = topojson.feature(countiesData, countiesData.objects.counties);
         
+        // Debug: Check if Mahnomen County is in the original data
+        const mahnomenCounty = geoJson.features.find(feature => 
+          feature.id === "27087" || 
+          (feature.properties && feature.properties.name === "Mahnomen")
+        );
+        
+        if (mahnomenCounty) {
+          console.log("Found Mahnomen County in original data:", mahnomenCounty);
+          
+          // Validate geometry
+          const validateGeometry = (geometry) => {
+            if (!geometry) {
+              console.error("Mahnomen County has no geometry");
+              return false;
+            }
+            
+            if (!geometry.type) {
+              console.error("Mahnomen County geometry has no type");
+              return false;
+            }
+            
+            if (!geometry.coordinates || !Array.isArray(geometry.coordinates)) {
+              console.error("Mahnomen County has invalid coordinates");
+              return false;
+            }
+            
+            // Check if coordinates are valid (not NaN, not empty)
+            const checkCoordinates = (coords) => {
+              if (!Array.isArray(coords)) return false;
+              
+              if (coords.length === 0) {
+                console.error("Empty coordinates array");
+                return false;
+              }
+              
+              if (Array.isArray(coords[0])) {
+                // This is an array of coordinates or arrays
+                return coords.every(checkCoordinates);
+              } else {
+                // This is a single coordinate pair
+                return coords.length >= 2 && 
+                      !isNaN(coords[0]) && 
+                      !isNaN(coords[1]);
+              }
+            };
+            
+            const valid = checkCoordinates(geometry.coordinates);
+            if (!valid) {
+              console.error("Mahnomen County has invalid coordinate values");
+            }
+            return valid;
+          };
+          
+          const isValid = validateGeometry(mahnomenCounty.geometry);
+          console.log("Mahnomen County geometry is valid:", isValid);
+        } else {
+          console.error("Mahnomen County not found in original data");
+        }
+        
         // Filter counties to match the filtered states
         // Counties have 5-digit FIPS codes where first 2 digits are the state FIPS
         const territoryStateFips = ['60', '66', '69', '72', '78'];
@@ -417,6 +541,13 @@ const MapComponent = ({ showCounties = true }) => {
             return countyFips && !territoryStateFips.includes(countyFips.substring(0, 2));
           })
         };
+        
+        // Double check Mahnomen County survived filtering
+        const mahnomenAfterFilter = filteredCounties.features.find(feature => 
+          feature.id === "27087" || 
+          (feature.properties && feature.properties.name === "Mahnomen")
+        );
+        console.log("Mahnomen County after filtering:", mahnomenAfterFilter ? "Present" : "Missing");
         
         setCountyGeoJsonData(filteredCounties);
         setCountiesLoading(false);
@@ -472,6 +603,90 @@ const MapComponent = ({ showCounties = true }) => {
         alaskaScaleY
       );
       
+      // Debug: Check if Mahnomen County is in the transformed data
+      const mahnomenCounty = fullyTransformed.features.find(feature => 
+        feature.id === "27087" || 
+        (feature.properties && feature.properties.name === "Mahnomen")
+      );
+      
+      console.log("Mahnomen County in transformed data:", mahnomenCounty ? "Found" : "Not found");
+      if (mahnomenCounty) {
+        console.log("Mahnomen County details:", mahnomenCounty);
+        
+        // Check if Mahnomen County needs to be fixed
+        // Minnesota's approximate bounding box
+        const mnBoundingBox = {
+          minLon: -97.5, maxLon: -89.0,
+          minLat: 43.0, maxLat: 49.5
+        };
+        
+        // Check if Mahnomen County is outside Minnesota
+        let needsFixing = false;
+        
+        if (mahnomenCounty.geometry && mahnomenCounty.geometry.coordinates) {
+          try {
+            // For Polygon geometries
+            if (mahnomenCounty.geometry.type === 'Polygon' && mahnomenCounty.geometry.coordinates.length > 0) {
+              const coords = mahnomenCounty.geometry.coordinates[0];
+              // Check if any coordinate is outside Minnesota
+              needsFixing = coords.some(coord => {
+                const lon = coord[0];
+                const lat = coord[1];
+                return (lon < mnBoundingBox.minLon || lon > mnBoundingBox.maxLon || 
+                        lat < mnBoundingBox.minLat || lat > mnBoundingBox.maxLat);
+              });
+            }
+            // For MultiPolygon geometries
+            else if (mahnomenCounty.geometry.type === 'MultiPolygon' && mahnomenCounty.geometry.coordinates.length > 0) {
+              needsFixing = mahnomenCounty.geometry.coordinates.some(polygon => {
+                if (polygon.length > 0) {
+                  const coords = polygon[0];
+                  return coords.some(coord => {
+                    const lon = coord[0];
+                    const lat = coord[1];
+                    return (lon < mnBoundingBox.minLon || lon > mnBoundingBox.maxLon || 
+                            lat < mnBoundingBox.minLat || lat > mnBoundingBox.maxLat);
+                  });
+                }
+                return false;
+              });
+            }
+          } catch (e) {
+            console.warn('Error checking Mahnomen County coordinates:', e);
+          }
+        }
+        
+        if (needsFixing) {
+          console.log("Mahnomen County is outside Minnesota - fixing position");
+          
+          // Create a fixed version of the county data with Mahnomen in the right place
+          const fixedCountyData = JSON.parse(JSON.stringify(fullyTransformed));
+          
+          // Find the original Mahnomen County from the untransformed data
+          const originalMahnomen = countyGeoJsonData.features.find(feature => 
+            feature.id === "27087" || 
+            (feature.properties && feature.properties.name === "Mahnomen")
+          );
+          
+          if (originalMahnomen) {
+            // Replace the transformed Mahnomen with the original
+            const mahnomenIndex = fixedCountyData.features.findIndex(feature => 
+              feature.id === "27087" || 
+              (feature.properties && feature.properties.name === "Mahnomen")
+            );
+            
+            if (mahnomenIndex >= 0) {
+              fixedCountyData.features[mahnomenIndex] = originalMahnomen;
+              console.log("Replaced Mahnomen County with original untransformed version");
+              
+              // Use the fixed data
+              setTransformedCountyData(fixedCountyData);
+              return;
+            }
+          }
+        }
+      }
+      
       setTransformedCountyData(fullyTransformed);
     }
   }, [
@@ -498,6 +713,24 @@ const MapComponent = ({ showCounties = true }) => {
     color: '#444',
     weight: 0.5,
     fillOpacity: 0
+  };
+
+  // Special style function to highlight Mahnomen County
+  const countyStyleFunction = (feature) => {
+    // Check if this is Mahnomen County
+    const isMahnomen = feature.id === "27087" || 
+                      (feature.properties && feature.properties.name === "Mahnomen");
+    
+    if (isMahnomen) {
+      return {
+        color: 'red',
+        weight: 2,
+        fillColor: 'yellow',
+        fillOpacity: 0.3
+      };
+    }
+    
+    return countyStyle;
   };
 
   return (

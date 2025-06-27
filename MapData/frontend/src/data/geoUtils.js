@@ -199,64 +199,18 @@ export const repositionAlaskaHawaii = (geoJson) => {
   // Reference point (approximate southwest corner of Texas)
   const texasReference = [-106, 25];
   
-  // Count how many features are transformed
+  // Count transformations for debugging
   let alaskaCount = 0;
   let hawaiiCount = 0;
   
-  // Enhanced Alaska identification - check for any property that might indicate Alaska
-  const isAlaskaFeature = (feature) => {
-    if (!feature || !feature.properties) return false;
-    
-    const props = feature.properties;
-    // Check standard property names
-    const name = (props.name || props.NAME || '').toLowerCase();
-    const fips = String(props.fips_code || props.STATE || props.STATEFP || feature.id || '');
-    
-    // Check for Alaska in any string property
-    const hasAlaskaInProps = Object.entries(props).some(([key, val]) => 
-      typeof val === 'string' && val.toLowerCase().includes('alaska')
-    );
-    
-    // Check for Alaska's FIPS code in any property
-    const hasAlaskaFipsInProps = Object.entries(props).some(([key, val]) => 
-      typeof val === 'string' && val === '02'
-    );
-    
-    // Check for Alaska's abbreviation
-    const hasAKInProps = Object.entries(props).some(([key, val]) => 
-      typeof val === 'string' && 
-      (val.toUpperCase() === 'AK' || key.toLowerCase() === 'abbreviation' && val.toUpperCase() === 'AK')
-    );
-    
-    console.log(`Checking feature for Alaska: name=${name}, fips=${fips}, hasAlaskaInProps=${hasAlaskaInProps}, hasAKInProps=${hasAKInProps}`);
-    
-    return name === 'alaska' || fips === '02' || hasAlaskaInProps || hasAlaskaFipsInProps || hasAKInProps;
-  };
-  
-  // Debug: Check for Alaska in the features - using more comprehensive property checks
-  const alaskaFeatures = result.features.filter(feature => isAlaskaFeature(feature));
-  
-  console.log(`Found ${alaskaFeatures.length} Alaska features before transformation`);
-  if (alaskaFeatures.length > 0) {
-    console.log('First Alaska feature properties:', alaskaFeatures[0].properties);
-  } else {
-    console.log('No Alaska features found! Checking all feature properties for debugging:');
-    // Log a sample of feature properties to help debug
-    const sampleSize = Math.min(5, result.features.length);
-    for (let i = 0; i < sampleSize; i++) {
-      const feature = result.features[i];
-      const props = feature.properties || {};
-      console.log(`Feature ${i} properties:`, {
-        id: feature.id,
-        name: props.NAME || props.name || 'undefined',
-        fips: props.STATE || props.STATEFP || props.state || props.fips_code || 'undefined',
-        propertyKeys: Object.keys(props)
-      });
-    }
-  }
-  
-  // Process each feature
+  // Transform each feature
   result.features = result.features.map(feature => {
+    // Skip Mahnomen County - ensure it stays in Minnesota
+    if (isMahnomenCounty(feature)) {
+      console.log("Preserving Mahnomen County position in Minnesota");
+      return feature;
+    }
+    
     // Check all possible locations for state FIPS code and name
     const props = feature.properties || {};
     const name = (props.name || props.NAME || '').toLowerCase();
@@ -302,6 +256,11 @@ export const repositionAlaskaHawaii = (geoJson) => {
 // Helper function to identify Hawaii features
 export const isHawaiiFeature = (feature) => {
   if (!feature || !feature.properties) return false;
+  
+  // Explicitly exclude Mahnomen County
+  if (isMahnomenCounty(feature)) {
+    return false;
+  }
   
   const props = feature.properties;
   const name = (props.name || props.NAME || '').toLowerCase();
@@ -402,6 +361,17 @@ export const isDuplicateHawaiiFeature = (feature, transformedFeatures) => {
   });
 };
 
+// Helper function to identify Mahnomen County, Minnesota
+export const isMahnomenCounty = (feature) => {
+  if (!feature || !feature.properties) return false;
+  
+  // Check for Mahnomen County by ID or name
+  const isMahnomenById = feature.id === "27087";
+  const isMahnomenByName = feature.properties.name === "Mahnomen";
+  
+  return isMahnomenById || isMahnomenByName;
+};
+
 // Function to dynamically transform Hawaii's position and scale
 export const transformHawaii = (geoJson, scale = HAWAII_CONFIG.defaults.scale, 
                                translateX = HAWAII_CONFIG.defaults.translateX, 
@@ -419,6 +389,11 @@ export const transformHawaii = (geoJson, scale = HAWAII_CONFIG.defaults.scale,
   
   // Process each feature
   result.features = result.features.map(feature => {
+    // Skip Mahnomen County - ensure it stays in Minnesota
+    if (isMahnomenCounty(feature)) {
+      return feature;
+    }
+    
     // Check if this is a Hawaii feature
     const isHawaii = isHawaiiFeature(feature);
     
@@ -512,6 +487,11 @@ const transformPolygon = (polygon, scale, translateX, translateY, scaleY) => {
 // Helper function to identify Alaska features
 export const isAlaskaFeature = (feature) => {
   if (!feature || !feature.properties) return false;
+  
+  // Explicitly exclude Mahnomen County
+  if (isMahnomenCounty(feature)) {
+    return false;
+  }
   
   const props = feature.properties;
   const name = (props.name || props.NAME || '').toLowerCase();
@@ -630,6 +610,11 @@ export const transformAlaska = (geoJson, scale = ALASKA_CONFIG.defaults.scale,
   
   // Process each feature
   result.features = result.features.map(feature => {
+    // Skip Mahnomen County - ensure it stays in Minnesota
+    if (isMahnomenCounty(feature)) {
+      return feature;
+    }
+    
     // Check if this is an Alaska feature
     const isAlaska = isAlaskaFeature(feature);
     

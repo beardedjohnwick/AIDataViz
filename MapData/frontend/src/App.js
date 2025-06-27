@@ -2,9 +2,6 @@ import React, { useEffect, useState } from 'react';
 import MapComponent from './components/MapComponent';
 import ControlPanel from './components/ControlPanel';
 import testApiConnection from './test-api';
-import { hawaiiTransformDemo } from './data/hawaiiTransformDemo';
-import { alaskaTransformDemo } from './data/alaskaTransformDemo';
-import testHawaiiTransformation from './data/testHawaiiTransform';
 import { HAWAII_CONFIG, ALASKA_CONFIG } from './data/geoUtils';
 
 function App() {
@@ -111,12 +108,6 @@ function App() {
     // Make the test function available in the global scope
     window.testApiConnection = testApiConnection;
     
-    // Make the Hawaii transform demo available in the global scope
-    window.hawaiiTransformDemo = hawaiiTransformDemo;
-    
-    // Make the Alaska transform demo available in the global scope
-    window.alaskaTransformDemo = alaskaTransformDemo;
-    
     // Make Hawaii transformation functions available globally
     window.setHawaiiScale = handleHawaiiScaleChange;
     window.setHawaiiTranslateX = handleHawaiiTranslateXChange;
@@ -133,37 +124,6 @@ function App() {
     // Make county toggle functionality available globally for testing
     window.countyToggle = showCounties;
     window.onCountyToggle = handleCountyToggle;
-    
-    // Make Hawaii transformation test available globally
-    window.testHawaiiTransformation = testHawaiiTransformation;
-    
-    // Create Alaska transformation test function
-    window.testAlaskaTransformation = () => {
-      console.log('Testing Alaska transformation...');
-      
-      // Test 1: Scale Alaska
-      window.alaskaTransform.setTransformation(0.5, 45, -100, 0.7);
-      console.log('Test 1: Scaled Alaska to 0.5x horizontally, 0.7x vertically');
-      
-      setTimeout(() => {
-        // Test 2: Move Alaska horizontally
-        window.alaskaTransform.setTransformation(0.5, 60, -100, 0.7);
-        console.log('Test 2: Moved Alaska right');
-        
-        setTimeout(() => {
-          // Test 3: Move Alaska vertically
-          window.alaskaTransform.setTransformation(0.5, 60, -80, 0.7);
-          console.log('Test 3: Moved Alaska up');
-          
-          setTimeout(() => {
-            // Test 4: Reset Alaska
-            window.alaskaTransform.reset();
-            console.log('Test 4: Reset Alaska to default position');
-            console.log('Alaska transformation test complete!');
-          }, 2000);
-        }, 2000);
-      }, 2000);
-    };
     
     // Run the test automatically when in development
     if (process.env.NODE_ENV === 'development') {

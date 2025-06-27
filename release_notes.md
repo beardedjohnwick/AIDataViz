@@ -1,3 +1,15 @@
+# v1.5.2 - Mahnomen Fix
+
+## Major Changes
+- Fixed issue with Mahnomen County, Minnesota being incorrectly transformed
+- Added special handling to ensure Mahnomen County stays in its correct geographic position
+- Implemented isMahnomenCounty helper function to identify the county by ID or name
+
+## Frontend Changes
+- Added isMahnomenCounty function in geoUtils.js
+- Updated transformation functions to skip Mahnomen County
+- Enhanced repositionAlaskaHawaii, transformHawaii, and transformAlaska functions to preserve Mahnomen County's position
+
 # v1.5.1 - Map Bounds Implementation
 
 ## Major Changes
