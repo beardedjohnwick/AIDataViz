@@ -19,7 +19,7 @@ import {
 } from '../data/geoUtils';
 
 // Component to force re-render of GeoJSON when data changes
-const GeoJSONWithUpdates = ({ data, style, zIndex }) => {
+const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties }) => {
   const map = useMap();
   const geoJsonLayerRef = useRef(null);
   
@@ -31,7 +31,65 @@ const GeoJSONWithUpdates = ({ data, style, zIndex }) => {
     
     // Create new layer
     if (data) {
-      const layer = L.geoJSON(data, { style });
+      // Create a style function that adds hover state when counties are not shown
+      const styleFunction = (feature) => {
+        const baseStyle = typeof style === 'function' ? style(feature) : style;
+        return baseStyle;
+      };
+      
+      const layer = L.geoJSON(data, { 
+        style: styleFunction,
+        onEachFeature: (feature, layer) => {
+          // Check if this is a state or county feature
+          const isCounty = feature.properties && (feature.properties.GEOID || feature.id && feature.id.toString().length > 2);
+          
+          // Store the original style to restore it on mouseout
+          const originalStyle = {
+            fillColor: 'transparent',
+            fillOpacity: 0,
+            weight: layer.options.weight,
+            color: layer.options.color,
+            opacity: layer.options.opacity
+          };
+          
+          // Only add hover state to states when counties are not shown
+          if (!showCounties && !isCounty) {
+            layer.on({
+              mouseover: (e) => {
+                const layer = e.target;
+                layer.setStyle({
+                  fillColor: '#cccccc',
+                  fillOpacity: 0.5
+                });
+              },
+              mouseout: (e) => {
+                const layer = e.target;
+                layer.setStyle(originalStyle);
+              }
+            });
+          }
+          // Add hover state to counties when counties are shown
+          else if (showCounties && isCounty) {
+            layer.on({
+              mouseover: (e) => {
+                const layer = e.target;
+                layer.setStyle({
+                  fillColor: '#cccccc',
+                  fillOpacity: 0.5
+                });
+                if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
+                  layer.bringToFront();
+                }
+              },
+              mouseout: (e) => {
+                const layer = e.target;
+                layer.setStyle(originalStyle);
+              }
+            });
+          }
+        }
+      });
+      
       layer.setZIndex(zIndex || 1);
       layer.addTo(map);
       geoJsonLayerRef.current = layer;
@@ -43,7 +101,7 @@ const GeoJSONWithUpdates = ({ data, style, zIndex }) => {
         geoJsonLayerRef.current.removeFrom(map);
       }
     };
-  }, [map, data, style, zIndex]);
+  }, [map, data, style, zIndex, showCounties]);
   
   return null;
 };
@@ -341,6 +399,7 @@ const MapComponent = ({ showCounties = true }) => {
             data={transformedCountyData} 
             style={countyStyle}
             zIndex={1}
+            showCounties={showCounties}
           />
         )}
         {transformedStateData && (
@@ -348,6 +407,7 @@ const MapComponent = ({ showCounties = true }) => {
             data={transformedStateData} 
             style={stateStyle}
             zIndex={2}
+            showCounties={showCounties}
           />
         )}
       </MapContainer>

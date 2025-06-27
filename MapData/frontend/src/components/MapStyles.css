@@ -34,6 +34,20 @@
   background-color: #ffffff !important;
 }
 
+/* State hover styles */
+.state-hover {
+  fill: #cccccc !important;
+  fill-opacity: 0.5 !important;
+  transition: fill-opacity 0.2s ease;
+}
+
+/* County hover styles */
+.county-hover {
+  fill: #cccccc !important;
+  fill-opacity: 0.5 !important;
+  transition: fill-opacity 0.2s ease;
+}
+
 /* Control Panel Styles */
 .control-panel {
   position: absolute;
