@@ -1,4 +1,6 @@
 import axios from 'axios';
+// Import static data for fallback
+import statesData from './us-states.json';
 
 // Define the API base URL
 // In development, this would point to the FastAPI server
@@ -87,7 +89,10 @@ export const geoDataService = {
         // Something happened in setting up the request that triggered an Error
         console.error('Error setting up request:', error.message);
       }
-      throw error;
+      
+      // Use local static data as fallback
+      console.log('Using local static data as fallback');
+      return statesData;
     }
   },
   

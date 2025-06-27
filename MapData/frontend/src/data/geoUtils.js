@@ -1,5 +1,28 @@
 import { feature } from 'topojson-client';
 
+// Configuration constants for Hawaii transformation
+export const HAWAII_CONFIG = {
+  // Default transformation values
+  defaults: {
+    scale: 1.0,
+    translateX: 158,
+    translateY: -18
+  },
+  // Reference point (approximate southwest corner of Texas)
+  referencePoint: [-106, 25],
+  // Hawaii state FIPS code
+  stateFips: '15',
+  // Hawaii county names
+  countyNames: ['honolulu', 'hawaii', 'maui', 'kauai', 'kalawao'],
+  // Approximate bounding box for Hawaii
+  boundingBox: {
+    minLon: -160,
+    maxLon: -154,
+    minLat: 18,
+    maxLat: 23
+  }
+};
+
 // Convert TopoJSON to GeoJSON for states
 export const convertTopoToGeoStates = (topoData) => {
   if (!topoData) return null;
@@ -252,6 +275,179 @@ export const repositionAlaskaHawaii = (geoJson) => {
   return result;
 };
 
+// Helper function to identify Hawaii features
+export const isHawaiiFeature = (feature) => {
+  if (!feature || !feature.properties) return false;
+  
+  const props = feature.properties;
+  const name = (props.name || props.NAME || '').toLowerCase();
+  const fips = String(props.fips_code || props.STATE || props.STATEFP || feature.id || '');
+  
+  // For counties, check if the first 2 digits of the 5-digit FIPS code match Hawaii's state code
+  const countyFips = String(props.GEOID || props.fips_code || feature.id || '');
+  const isHawaiiCounty = countyFips.length === 5 && countyFips.substring(0, 2) === HAWAII_CONFIG.stateFips;
+  
+  // Check for Hawaii in any string property
+  const hasHawaiiInProps = Object.entries(props).some(([key, val]) => 
+    typeof val === 'string' && val.toLowerCase().includes('hawaii')
+  );
+  
+  // Check for Hawaii's FIPS code in any property
+  const hasHawaiiFipsInProps = Object.entries(props).some(([key, val]) => 
+    typeof val === 'string' && (val === HAWAII_CONFIG.stateFips || val === `${HAWAII_CONFIG.stateFips}000`)
+  );
+  
+  // Check for Hawaii's abbreviation
+  const hasHIInProps = Object.entries(props).some(([key, val]) => 
+    typeof val === 'string' && 
+    (val.toUpperCase() === 'HI' || key.toLowerCase() === 'abbreviation' && val.toUpperCase() === 'HI')
+  );
+  
+  // Check for known Hawaii county names
+  const hasHawaiianCountyName = name && HAWAII_CONFIG.countyNames.some(countyName => name.includes(countyName));
+  
+  // Check for Hawaii coordinates (approximate bounding box for Hawaii)
+  let isInHawaiiRegion = false;
+  if (feature.geometry && feature.geometry.coordinates) {
+    try {
+      const bbox = HAWAII_CONFIG.boundingBox;
+      
+      // For Polygon geometries
+      if (feature.geometry.type === 'Polygon' && feature.geometry.coordinates.length > 0) {
+        const coords = feature.geometry.coordinates[0];
+        isInHawaiiRegion = coords.some(coord => {
+          const lon = coord[0];
+          const lat = coord[1];
+          return (lon > bbox.minLon && lon < bbox.maxLon && lat > bbox.minLat && lat < bbox.maxLat);
+        });
+      }
+      // For MultiPolygon geometries
+      else if (feature.geometry.type === 'MultiPolygon' && feature.geometry.coordinates.length > 0) {
+        isInHawaiiRegion = feature.geometry.coordinates.some(polygon => {
+          if (polygon.length > 0) {
+            const coords = polygon[0];
+            return coords.some(coord => {
+              const lon = coord[0];
+              const lat = coord[1];
+              return (lon > bbox.minLon && lon < bbox.maxLon && lat > bbox.minLat && lat < bbox.maxLat);
+            });
+          }
+          return false;
+        });
+      }
+    } catch (e) {
+      console.warn('Error checking Hawaii coordinates:', e);
+    }
+  }
+  
+  return name === 'hawaii' || 
+         fips === HAWAII_CONFIG.stateFips || 
+         isHawaiiCounty || 
+         hasHawaiiInProps || 
+         hasHawaiiFipsInProps || 
+         hasHIInProps || 
+         hasHawaiianCountyName ||
+         isInHawaiiRegion;
+};
+
+// Helper function to check if a feature is a duplicate of Hawaii
+export const isDuplicateHawaiiFeature = (feature, transformedFeatures) => {
+  if (!feature || !feature.properties || !feature.geometry || !transformedFeatures) {
+    return false;
+  }
+  
+  // Check if this is a Hawaii feature
+  if (!isHawaiiFeature(feature)) {
+    return false;
+  }
+  
+  // Get feature properties
+  const props = feature.properties || {};
+  const name = (props.name || props.NAME || '').toLowerCase();
+  const fips = String(props.fips_code || props.STATE || props.STATEFP || feature.id || '');
+  
+  // Check if this feature has already been transformed
+  return transformedFeatures.some(transformedFeature => {
+    const transformedProps = transformedFeature.properties || {};
+    const transformedName = (transformedProps.name || transformedProps.NAME || '').toLowerCase();
+    const transformedFips = String(transformedProps.fips_code || transformedProps.STATE || transformedProps.STATEFP || transformedFeature.id || '');
+    
+    // Check if names or FIPS codes match
+    return (name && transformedName && name === transformedName) || 
+           (fips && transformedFips && fips === transformedFips);
+  });
+};
+
+// Function to dynamically transform Hawaii's position and scale
+export const transformHawaii = (geoJson, scale = HAWAII_CONFIG.defaults.scale, 
+                               translateX = HAWAII_CONFIG.defaults.translateX, 
+                               translateY = HAWAII_CONFIG.defaults.translateY) => {
+  if (!geoJson || !geoJson.features) {
+    console.warn('transformHawaii: Invalid GeoJSON data provided');
+    return geoJson;
+  }
+  
+  // Deep clone the GeoJSON to avoid mutating the original
+  const result = JSON.parse(JSON.stringify(geoJson));
+  
+  // Count how many features are transformed
+  let hawaiiCount = 0;
+  
+  // Process each feature
+  result.features = result.features.map(feature => {
+    // Check if this is a Hawaii feature
+    const isHawaii = isHawaiiFeature(feature);
+    
+    if (isHawaii) {
+      // Transform Hawaii
+      hawaiiCount++;
+      
+      // Apply the transformation
+      feature = transformFeature(
+        feature, 
+        scale, 
+        HAWAII_CONFIG.referencePoint[0] + translateX, 
+        HAWAII_CONFIG.referencePoint[1] + translateY
+      );
+    }
+    
+    return feature;
+  });
+  
+  console.log(`Hawaii transformation complete. Transformed ${hawaiiCount} Hawaii features.`);
+  return result;
+};
+
+// Utility function to programmatically control Hawaii's transformation
+export const setHawaiiTransformation = (scale, translateX, translateY) => {
+  // Find the hidden control elements
+  const scaleControl = document.querySelector('[data-hawaii-control="scale"]');
+  const translateXControl = document.querySelector('[data-hawaii-control="translateX"]');
+  const translateYControl = document.querySelector('[data-hawaii-control="translateY"]');
+  
+  // Update the control values and dispatch change events
+  if (scaleControl) {
+    scaleControl.value = scale;
+    scaleControl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  if (translateXControl) {
+    translateXControl.value = translateX;
+    translateXControl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  if (translateYControl) {
+    translateYControl.value = translateY;
+    translateYControl.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  return {
+    scale,
+    translateX,
+    translateY
+  };
+};
+
 // Helper function to transform a GeoJSON feature
 const transformFeature = (feature, scale, translateX, translateY, scaleY) => {
   if (!feature.geometry) {
@@ -259,21 +455,17 @@ const transformFeature = (feature, scale, translateX, translateY, scaleY) => {
     return feature;
   }
   
-  console.log(`Transforming feature with scale=${scale}, translateX=${translateX}, translateY=${translateY}, scaleY=${scaleY || scale}`);
+  const effectiveScaleY = scaleY || scale;
   
   // Process different geometry types
   if (feature.geometry.type === 'Polygon') {
-    console.log('Transforming Polygon geometry');
     feature.geometry.coordinates = transformPolygon(
-      feature.geometry.coordinates, scale, translateX, translateY, scaleY
+      feature.geometry.coordinates, scale, translateX, translateY, effectiveScaleY
     );
   } else if (feature.geometry.type === 'MultiPolygon') {
-    console.log('Transforming MultiPolygon geometry');
     feature.geometry.coordinates = feature.geometry.coordinates.map(polygon => 
-      transformPolygon(polygon, scale, translateX, translateY, scaleY)
+      transformPolygon(polygon, scale, translateX, translateY, effectiveScaleY)
     );
-  } else {
-    console.log(`Skipping unsupported geometry type: ${feature.geometry.type}`);
   }
   
   return feature;

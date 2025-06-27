@@ -1,342 +1,296 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MapContainer, TileLayer, useMapEvents } from 'react-leaflet';
-// Import TopoJSON data (as fallback)
-import statesTopoJSON from '../data/us-states.json';
-import countiesTopoJSON from '../data/us-counties.json';
-// Import conversion utilities
-import { convertTopoToGeoStates, convertTopoToGeoCounties, repositionAlaskaHawaii } from '../data/geoUtils';
-// Import API service
-import { geoDataService } from '../data/apiService';
-// Import layer components
-import StateLayers from './StateLayers';
-import CountyLayers from './CountyLayers';
-import ControlPanel from './ControlPanel';
+import React, { useState, useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
 import './MapStyles.css';
+import L from 'leaflet';
+import * as topojson from 'topojson-client';
+import statesData from '../data/us-states.json';
+import countiesData from '../data/us-counties.json';
+import { geoDataService } from '../data/apiService';
+import { transformHawaii, isHawaiiFeature, setHawaiiTransformation, HAWAII_CONFIG } from '../data/geoUtils';
 
-// Component to handle zoom events
-function ZoomHandler({ setZoomLevel }) {
-  const mapEvents = useMapEvents({
-    zoomend: () => {
-      const currentZoom = mapEvents.getZoom();
-      setZoomLevel(currentZoom);
+// Component to force re-render of GeoJSON when data changes
+const GeoJSONWithUpdates = ({ data, style, zIndex }) => {
+  const map = useMap();
+  const geoJsonLayerRef = useRef(null);
+  
+  useEffect(() => {
+    // Remove previous layer if it exists
+    if (geoJsonLayerRef.current) {
+      geoJsonLayerRef.current.removeFrom(map);
     }
-  });
+    
+    // Create new layer
+    if (data) {
+      const layer = L.geoJSON(data, { style });
+      layer.setZIndex(zIndex || 1);
+      layer.addTo(map);
+      geoJsonLayerRef.current = layer;
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (geoJsonLayerRef.current) {
+        geoJsonLayerRef.current.removeFrom(map);
+      }
+    };
+  }, [map, data, style, zIndex]);
   
   return null;
-}
+};
 
-// Component to handle map reference and reset view
-function MapController({ mapRef, defaultCenter, defaultZoom }) {
-  const map = useMapEvents({});
-  
-  // Store the map reference
-  mapRef.current = map;
-  
-  return null;
-}
-
-function MapComponent() {
-  const [statesData, setStatesData] = useState(null);
-  const [countiesData, setCountiesData] = useState(null);
-  const [zoomLevel, setZoomLevel] = useState(4);
-  const [countyToggle, setCountyToggle] = useState(false);
-  const [loading, setLoading] = useState(true);
+/**
+ * Leaflet map component that displays US state and county boundaries
+ */
+const MapComponent = ({ showCounties = true }) => {
+  const [stateGeoJsonData, setStateGeoJsonData] = useState(null);
+  const [countyGeoJsonData, setCountyGeoJsonData] = useState(null);
+  const [statesLoading, setStatesLoading] = useState(true);
+  const [countiesLoading, setCountiesLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [stateSelected, setStateSelected] = useState(false);
-  const [selectedStateName, setSelectedStateName] = useState(null);
-  const [countySelected, setCountySelected] = useState(false);
-  const [selectedCountyName, setSelectedCountyName] = useState(null);
-  const [usingApi, setUsingApi] = useState(true);
-  const [showAreaInTooltip, setShowAreaInTooltip] = useState(true);
   
-  // Reference to the map instance
-  const mapRef = useRef(null);
+  // Hawaii transformation parameters
+  const [hawaiiScale, setHawaiiScale] = useState(HAWAII_CONFIG.defaults.scale);
+  const [hawaiiTranslateX, setHawaiiTranslateX] = useState(HAWAII_CONFIG.defaults.translateX);
+  const [hawaiiTranslateY, setHawaiiTranslateY] = useState(HAWAII_CONFIG.defaults.translateY);
+  
+  // State and county data with Hawaii transformed
+  const [transformedStateData, setTransformedStateData] = useState(null);
+  const [transformedCountyData, setTransformedCountyData] = useState(null);
+  
+  // Ref to store the current transformation parameters
+  const transformationRef = useRef({
+    scale: hawaiiScale,
+    translateX: hawaiiTranslateX,
+    translateY: hawaiiTranslateY
+  });
 
-  // Counties are shown based only on toggle state, not zoom level
-  const showCounties = countyToggle;
-
-  // Center of contiguous US
-  const center = [37, -98];
-  const zoom = 5;
-
-  // Toggle county visibility
-  const handleCountyToggle = () => {
-    setCountyToggle(!countyToggle);
-  };
-  
-  // Toggle area display in tooltip
-  const handleAreaToggle = () => {
-    setShowAreaInTooltip(!showAreaInTooltip);
-  };
-  
-  // Handle state selection
-  const handleStateSelected = (selected, stateName) => {
-    setStateSelected(selected);
-    setSelectedStateName(stateName);
-    // Reset county selection when selecting a state
-    setCountySelected(false);
-    setSelectedCountyName(null);
-  };
-  
-  // Handle county selection
-  const handleCountySelected = (selected, countyName) => {
-    setCountySelected(selected);
-    setSelectedCountyName(countyName);
-  };
-  
-  // Reset map to default view
-  const resetMapView = () => {
-    if (mapRef.current) {
-      mapRef.current.setView(center, zoom);
-      setStateSelected(false);
-      setSelectedStateName(null);
-      setCountySelected(false);
-      setSelectedCountyName(null);
-    }
-  };
-
-  // Function to validate GeoJSON data
-  const validateGeoJSON = (data) => {
-    if (!data || !data.type || data.type !== 'FeatureCollection' || !Array.isArray(data.features)) {
-      console.error('Invalid GeoJSON data structure:', data);
-      return false;
-    }
+  // Fix Leaflet's icon paths which can cause issues in React
+  useEffect(() => {
+    // Fix Leaflet default icon issue in React
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
+      iconUrl: require('leaflet/dist/images/marker-icon.png'),
+      shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
+    });
     
-    // Check if features have properties and geometry
-    if (data.features.length === 0) {
-      console.error('GeoJSON has no features');
-      return false;
-    }
-    
-    for (const feature of data.features) {
-      if (!feature.properties || !feature.geometry) {
-        console.error('Feature missing properties or geometry:', feature);
-        return false;
+    // Expose the Hawaii transformation API to the window object
+    window.hawaiiTransform = {
+      setTransformation: (scale, translateX, translateY) => {
+        setHawaiiScale(scale);
+        setHawaiiTranslateX(translateX);
+        setHawaiiTranslateY(translateY);
+        
+        // Update the ref with current values
+        transformationRef.current = { scale, translateX, translateY };
+        return transformationRef.current;
+      },
+      getTransformation: () => {
+        return transformationRef.current;
+      },
+      reset: () => {
+        setHawaiiScale(HAWAII_CONFIG.defaults.scale);
+        setHawaiiTranslateX(HAWAII_CONFIG.defaults.translateX);
+        setHawaiiTranslateY(HAWAII_CONFIG.defaults.translateY);
+        transformationRef.current = { ...HAWAII_CONFIG.defaults };
+        return transformationRef.current;
       }
-    }
+    };
+  }, []);
+  
+  // Update ref when state changes
+  useEffect(() => {
+    transformationRef.current = {
+      scale: hawaiiScale,
+      translateX: hawaiiTranslateX,
+      translateY: hawaiiTranslateY
+    };
+  }, [hawaiiScale, hawaiiTranslateX, hawaiiTranslateY]);
+
+  // Filter function to keep only continental US, Alaska, Hawaii, and DC
+  // Territories to exclude: Puerto Rico (72), American Samoa (60), Guam (66),
+  // US Virgin Islands (78), Northern Mariana Islands (69)
+  const filterUSStates = (geoJson) => {
+    if (!geoJson || !geoJson.features) return geoJson;
     
-    return true;
+    const territoryFipsCodes = ['60', '66', '69', '72', '78'];
+    
+    const filteredFeatures = geoJson.features.filter(feature => {
+      // Get FIPS code from feature properties
+      const fipsCode = feature.id || 
+                       (feature.properties && (feature.properties.fips_code || feature.properties.STATEFP));
+      
+      // Keep feature if it's not in the territory FIPS codes list
+      return !territoryFipsCodes.includes(fipsCode);
+    });
+    
+    return {
+      ...geoJson,
+      features: filteredFeatures
+    };
   };
 
-  // Check API health before loading data
-  const checkApiHealth = async () => {
+  // Convert TopoJSON to GeoJSON on component mount for states
+  useEffect(() => {
     try {
-      const isHealthy = await geoDataService.checkHealth();
-      return isHealthy;
-    } catch (error) {
-      console.error('API health check failed:', error);
-      return false;
-    }
-  };
-
-  // Define loadStatesData function at component scope so it can be called from anywhere
-  const loadStatesData = useCallback(async () => {
-    try {
-      setLoading(true);
-      console.log('Fetching states data...');
-      
-      // First check if API is healthy
-      const isApiHealthy = await checkApiHealth();
-      
-      if (!isApiHealthy) {
-        console.warn('API health check failed, falling back to static files');
-        throw new Error('API health check failed');
-      }
-      
-      const statesResponse = await geoDataService.getStates(true);
-      console.log('States data from API:', statesResponse);
-      
-      // Validate the GeoJSON data
-      if (validateGeoJSON(statesResponse)) {
-        console.log('API data is valid GeoJSON, applying Alaska/Hawaii repositioning...');
+      // Check if statesData is a valid TopoJSON
+      if (statesData && statesData.type === 'Topology' && statesData.objects && statesData.objects.states) {
+        // Convert TopoJSON to GeoJSON using the 'states' object
+        const geoJson = topojson.feature(statesData, statesData.objects.states);
         
-        // Check if Alaska exists in the data
-        const alaskaFeature = statesResponse.features.find(feature => {
-          const props = feature.properties || {};
-          const name = (props.name || props.NAME || '').toLowerCase();
-          const fips = props.fips_code || props.STATE || props.STATEFP || '';
-          return name === 'alaska' || fips === '02';
-        });
+        // Filter out territories
+        const filteredGeoJson = filterUSStates(geoJson);
         
-        console.log('Alaska found in API response before repositioning:', !!alaskaFeature);
-        
-        // Apply repositionAlaskaHawaii to ensure Alaska and Hawaii are properly positioned
-        const repositionedStatesData = repositionAlaskaHawaii(statesResponse);
-        console.log('Alaska/Hawaii repositioning complete');
-        
-        // Verify Alaska is still present after repositioning
-        const alaskaAfterRepositioning = repositionedStatesData.features.find(feature => {
-          const props = feature.properties || {};
-          const name = (props.name || props.NAME || '').toLowerCase();
-          const fips = props.fips_code || props.STATE || props.STATEFP || '';
-          return name === 'alaska' || fips === '02';
-        });
-        
-        console.log('Alaska found after repositioning:', !!alaskaAfterRepositioning);
-        
-        setStatesData(repositionedStatesData);
-        setUsingApi(true);
+        setStateGeoJsonData(filteredGeoJson);
+        setStatesLoading(false);
       } else {
-        console.error('Invalid GeoJSON data received from API, falling back to static files');
-        throw new Error('Invalid GeoJSON data');
+        setError('Invalid TopoJSON data format or missing states object');
+        setStatesLoading(false);
       }
     } catch (err) {
-      console.error('Error loading data from API:', err);
-      console.log('Falling back to static files...');
-      
-      // Fallback to static files
-      const staticStatesData = convertTopoToGeoStates(statesTopoJSON);
-      
-      // Apply Alaska/Hawaii repositioning to static data as well
-      const repositionedStatesData = repositionAlaskaHawaii(staticStatesData);
-      
-      // Verify Alaska is present in static data
-      const alaskaInStatic = repositionedStatesData.features.find(feature => {
-        const props = feature.properties || {};
-        const name = (props.name || props.NAME || '').toLowerCase();
-        return name === 'alaska';
-      });
-      
-      console.log('Alaska found in static data after repositioning:', !!alaskaInStatic);
-      
-      setStatesData(repositionedStatesData);
-      setUsingApi(false);
-    } finally {
-      setLoading(false);
+      console.error('Error converting TopoJSON to GeoJSON for states:', err);
+      setError(`Error processing state map data: ${err.message}`);
+      setStatesLoading(false);
     }
   }, []);
 
-  // Define loadCountiesData function at component scope so it can be called from anywhere
-  const loadCountiesData = useCallback(async () => {
-    if (countyToggle && !countiesData && usingApi) {
-      try {
-        setLoading(true);
-        console.log('Fetching counties data after toggle...');
-        const countiesResponse = await geoDataService.getCounties(true);
-        console.log('Counties data from API after toggle:', countiesResponse);
+  // Convert TopoJSON to GeoJSON on component mount for counties
+  useEffect(() => {
+    try {
+      // Check if countiesData is a valid TopoJSON
+      if (countiesData && countiesData.type === 'Topology' && countiesData.objects && countiesData.objects.counties) {
+        // Convert TopoJSON to GeoJSON using the 'counties' object
+        const geoJson = topojson.feature(countiesData, countiesData.objects.counties);
         
-        if (validateGeoJSON(countiesResponse)) {
-          // Apply repositionAlaskaHawaii to ensure Alaska and Hawaii counties are properly positioned
-          console.log('Repositioning Alaska and Hawaii for counties data after toggle');
-          const repositionedCountiesData = repositionAlaskaHawaii(countiesResponse);
-          console.log('Counties repositioning complete, features count:', repositionedCountiesData.features.length);
-          
-          // Check if Hawaii counties exist
-          const hawaiiCounties = repositionedCountiesData.features.filter(feature => {
-            const props = feature.properties || {};
-            const name = (props.name || '').toLowerCase();
-            return name.includes('hawaii') || name.includes('honolulu') || 
-                   name.includes('maui') || name.includes('kauai');
-          });
-          
-          console.log(`Hawaii counties found after repositioning: ${hawaiiCounties.length}`);
-          
-          // If no Hawaii counties in the API data, we might need to add them from static data
-          if (hawaiiCounties.length === 0) {
-            console.log('No Hawaii counties found in API data, checking static data');
-            // This could be enhanced to actually add Hawaii counties from static data if needed
-          }
-          
-          setCountiesData(repositionedCountiesData);
-        } else {
-          throw new Error('Invalid counties GeoJSON data');
-        }
-      } catch (err) {
-        console.error('Error loading counties data:', err);
-        setError('Failed to load counties data');
+        // Filter counties to match the filtered states
+        // Counties have 5-digit FIPS codes where first 2 digits are the state FIPS
+        const territoryStateFips = ['60', '66', '69', '72', '78'];
+        const filteredCounties = {
+          ...geoJson,
+          features: geoJson.features.filter(feature => {
+            const countyFips = feature.id || 
+                              (feature.properties && (feature.properties.fips_code || feature.properties.GEOID));
+            // Keep county if its state FIPS (first 2 digits) is not in the territory list
+            return countyFips && !territoryStateFips.includes(countyFips.substring(0, 2));
+          })
+        };
         
-        // Fallback to static counties data
-        const staticCountiesData = convertTopoToGeoCounties(countiesTopoJSON);
-        const repositionedCountiesData = repositionAlaskaHawaii(staticCountiesData);
-        setCountiesData(repositionedCountiesData);
-      } finally {
-        setLoading(false);
+        setCountyGeoJsonData(filteredCounties);
+        setCountiesLoading(false);
+      } else {
+        setError('Invalid TopoJSON data format or missing counties object');
+        setCountiesLoading(false);
       }
+    } catch (err) {
+      console.error('Error converting TopoJSON to GeoJSON for counties:', err);
+      setError(`Error processing county map data: ${err.message}`);
+      setCountiesLoading(false);
     }
-  }, [countyToggle, countiesData, usingApi]);
-
-  // Load data from API or fallback to static files
+  }, []);
+  
+  // Apply Hawaii transformations when data or transformation parameters change
   useEffect(() => {
-    loadStatesData();
-  }, [loadStatesData]);
+    if (stateGeoJsonData) {
+      // Transform Hawaii in state data
+      const transformedStates = transformHawaii(
+        stateGeoJsonData, 
+        hawaiiScale, 
+        hawaiiTranslateX, 
+        hawaiiTranslateY
+      );
+      setTransformedStateData(transformedStates);
+    }
+    
+    if (countyGeoJsonData) {
+      // Transform Hawaii in county data
+      const transformedCounties = transformHawaii(
+        countyGeoJsonData, 
+        hawaiiScale, 
+        hawaiiTranslateX, 
+        hawaiiTranslateY
+      );
+      setTransformedCountyData(transformedCounties);
+    }
+  }, [stateGeoJsonData, countyGeoJsonData, hawaiiScale, hawaiiTranslateX, hawaiiTranslateY]);
 
-  // Load counties data when toggle is switched on
-  useEffect(() => {
-    loadCountiesData();
-  }, [countyToggle, countiesData, usingApi, loadCountiesData]);
+  // Style for the state borders
+  const stateStyle = {
+    color: 'black',
+    weight: 1,
+    fillOpacity: 0
+  };
 
-  if (loading) {
-    return <div className="loading-indicator">Loading map data...</div>;
-  }
-
-  if (error) {
-    return <div className="error-message">Error: {error}</div>;
-  }
+  // Style for the county borders
+  const countyStyle = {
+    color: '#444',
+    weight: 0.5,
+    fillOpacity: 0
+  };
 
   return (
-    <div className="app-container">
-      {/* Control panel as a separate panel */}
-      <ControlPanel
-        countyToggle={countyToggle}
-        onCountyToggle={handleCountyToggle}
-        showAreaInTooltip={showAreaInTooltip}
-        onAreaToggle={handleAreaToggle}
-      />
-
-      {/* Map container */}
-      <div className="map-container">
-        {/* Reset button - shown when a state or county is selected */}
-        {(stateSelected || countySelected) && (
-          <div className="reset-button-container">
-            <button 
-              onClick={resetMapView}
-              className="reset-button"
-            >
-              Reset Map View
-            </button>
-          </div>
+    <>
+      {(statesLoading || countiesLoading) && <div className="map-loading">Loading map data...</div>}
+      {error && <div className="map-error">{error}</div>}
+      
+      <MapContainer 
+        center={[39.8283, -98.5795]} // Center of the US
+        zoom={4}
+        style={{ height: '100vh', width: '100%' }}
+        backgroundColor="#ffffff"
+      >
+        <TileLayer
+          url="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
+          attribution=""
+        />
+        {showCounties && transformedCountyData && (
+          <GeoJSONWithUpdates 
+            data={transformedCountyData} 
+            style={countyStyle}
+            zIndex={1}
+          />
         )}
-        
-        {/* Data source indicator */}
-        <div className="data-source-indicator">
-          {usingApi 
-            ? 'Using API data (Live database connection)' 
-            : 'Using static data with mock area values (API unavailable)'}
-        </div>
-        
-        <MapContainer
-          center={center}
-          zoom={zoom}
-          style={{ height: '100%', width: '100%', background: '#ffffff' }}
-          zoomControl={true}
-          doubleClickZoom={true}
-          scrollWheelZoom={true}
-          dragging={true}
-          minZoom={5}
-        >
-          {/* Zoom handler component */}
-          <ZoomHandler setZoomLevel={setZoomLevel} />
-          
-          {/* Map controller component */}
-          <MapController mapRef={mapRef} defaultCenter={center} defaultZoom={zoom} />
-          
-          {/* Render states using StateLayers component */}
-          {statesData && <StateLayers 
-            data={statesData} 
-            onStateSelected={handleStateSelected}
-            showAreaInTooltip={showAreaInTooltip} 
-          />}
-          
-          {/* Render counties using CountyLayers component */}
-          {showCounties && countiesData && <CountyLayers 
-            data={countiesData} 
-            onCountySelected={handleCountySelected}
-            showAreaInTooltip={showAreaInTooltip}
-          />}
-        </MapContainer>
+        {transformedStateData && (
+          <GeoJSONWithUpdates 
+            data={transformedStateData} 
+            style={stateStyle}
+            zIndex={2}
+          />
+        )}
+      </MapContainer>
+      
+      {/* Hawaii transformation controls - hidden from UI but available for programmatic control */}
+      <div className="hawaii-controls" style={{ display: 'none' }}>
+        <input
+          type="range"
+          min="0.5"
+          max="2"
+          step="0.1"
+          value={hawaiiScale}
+          onChange={(e) => setHawaiiScale(parseFloat(e.target.value))}
+          data-hawaii-control="scale"
+        />
+        <input
+          type="range"
+          min="100"
+          max="250"
+          step="1"
+          value={hawaiiTranslateX}
+          onChange={(e) => setHawaiiTranslateX(parseFloat(e.target.value))}
+          data-hawaii-control="translateX"
+        />
+        <input
+          type="range"
+          min="-50"
+          max="50"
+          step="1"
+          value={hawaiiTranslateY}
+          onChange={(e) => setHawaiiTranslateY(parseFloat(e.target.value))}
+          data-hawaii-control="translateY"
+        />
       </div>
-    </div>
+    </>
   );
-}
+};
 
 export default MapComponent; 

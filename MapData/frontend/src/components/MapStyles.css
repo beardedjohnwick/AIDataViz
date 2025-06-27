@@ -1,58 +1,56 @@
-/* Tooltip styles for map features */
-.state-tooltip, .county-tooltip {
-  background-color: rgba(255, 255, 255, 0.9);
-  border: 1px solid #999;
-  border-radius: 3px;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-  padding: 5px 10px;
-  font-size: 14px;
-  font-weight: bold;
-  pointer-events: none;
+/* Map styles will be added here */
+
+/* Map styles */
+
+.map-loading,
+.map-error,
+.map-fallback {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 8px 16px;
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.state-tooltip {
+.map-loading {
   color: #333;
 }
 
-.county-tooltip {
-  color: #555;
+.map-error {
+  color: #d32f2f;
 }
 
-/* Remove focus outline on map features */
-.map-feature-no-focus {
-  outline: none !important;
+.map-fallback {
+  color: #ff9800;
+  top: 50px; /* Position below other notifications */
 }
 
-/* Remove focus outline from leaflet SVG paths */
-.leaflet-interactive {
-  outline: none !important;
-}
-
-/* App Layout */
-.app-container {
-  display: flex;
-  height: 100vh;
-  width: 100%;
+/* Ensure map has white background */
+.leaflet-container {
+  background-color: #ffffff !important;
 }
 
 /* Control Panel Styles */
 .control-panel {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   width: 250px;
-  background-color: white;
-  padding: 15px;
-  box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-  overflow-y: auto;
-  height: 100%;
-  flex-shrink: 0;
-  border-right: 1px solid #e0e0e0;
-  transition: width 0.3s ease, padding 0.3s ease;
-  position: relative;
+  z-index: 1000;
+  transition: all 0.3s ease;
+  overflow: hidden;
 }
 
-/* Collapsed Control Panel */
 .control-panel.collapsed {
   width: 40px;
-  padding: 15px 5px;
+  height: 40px;
   overflow: hidden;
 }
 
@@ -60,154 +58,58 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-bottom: 1px solid #ddd;
+}
+
+.control-panel-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.panel-toggle-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0 5px;
+}
+
+.control-panel-content {
+  padding: 10px;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .control-panel.collapsed .control-panel-content {
   display: none;
 }
 
-.control-panel.collapsed .control-panel-title {
-  display: none;
-}
-
-.panel-toggle-button {
-  background: #f0f0f0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  padding: 0;
-  transition: background-color 0.2s;
-}
-
-.panel-toggle-button:hover {
-  background-color: #e0e0e0;
-}
-
-.control-panel.collapsed .panel-toggle-button {
-  margin: 0 auto;
-}
-
-.control-panel-title {
-  margin-top: 0;
-  margin-bottom: 0;
-  font-size: 16px;
-  color: #333;
-  flex-grow: 1;
-}
-
 .control-panel-section {
   margin-bottom: 15px;
+}
+
+.section-title {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+  color: #555;
 }
 
 .control-toggle {
   display: flex;
   align-items: center;
+  margin-bottom: 8px;
   cursor: pointer;
 }
 
 .toggle-label {
   margin-left: 8px;
+  font-size: 14px;
 }
 
-/* Section titles in control panel */
-.section-title {
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-size: 15px;
-  color: #333;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 5px;
-}
-
-/* Data controls container */
-.data-controls {
-  margin-top: 8px;
-}
-
-/* Data description text */
 .data-description {
-  font-size: 13px;
-  color: #555;
-  margin-bottom: 10px;
-  margin-top: 0;
-}
-
-/* Map Container Styles */
-.map-container {
-  flex-grow: 1;
-  height: 100%;
-  position: relative;
-}
-
-/* Reset Button Styles */
-.reset-button-container {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 1000;
-}
-
-.reset-button {
-  padding: 8px 12px;
-  background-color: #4285f4;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  font-weight: 500;
-  transition: background-color 0.2s, transform 0.1s;
-}
-
-.reset-button:hover {
-  background-color: #3367d6;
-}
-
-.reset-button:active {
-  transform: scale(0.98);
-}
-
-/* Tooltip styles */
-.state-tooltip {
-  background-color: rgba(255, 255, 255, 0.9);
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  padding: 5px 8px;
-  font-family: Arial, sans-serif;
   font-size: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: #777;
+  margin-bottom: 10px;
 }
-
-.custom-tooltip {
-  line-height: 1.4;
-}
-
-.custom-tooltip strong {
-  font-weight: bold;
-  font-size: 13px;
-}
-
-/* Data source indicator */
-.data-source-indicator {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  background-color: rgba(255, 255, 255, 0.9);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 13px;
-  z-index: 1000;
-  border: 1px solid #ddd;
-  color: #333;
-  font-weight: 500;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.15);
-  max-width: 250px;
-  text-align: center;
-} 
