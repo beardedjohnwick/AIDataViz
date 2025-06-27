@@ -7,6 +7,18 @@
   z-index: 1;
 }
 
+/* Map container styles */
+.map-container {
+  flex: 1;
+  height: 100vh;
+  position: relative;
+  transition: width 0.3s ease;
+}
+
+.map-container.panel-collapsed {
+  width: calc(100% - 40px);
+}
+
 .map-loading,
 .map-error,
 .map-fallback {
@@ -120,17 +132,15 @@ path:focus {
 
 /* Control Panel Styles */
 .control-panel {
-  position: absolute;
-  top: 0;
-  right: 0;
+  width: 250px;
   background: white;
   box-shadow: -2px 0 6px rgba(0, 0, 0, 0.3);
-  width: 250px;
   z-index: 1000;
-  transition: all 0.3s ease;
+  transition: width 0.3s ease;
   overflow: hidden;
   height: 100vh;
   border-left: 1px solid #ddd;
+  flex-shrink: 0;
 }
 
 .control-panel.collapsed {

@@ -142,8 +142,11 @@ function App() {
   }, [hawaiiScale, hawaiiTranslateX, hawaiiTranslateY, alaskaScale, alaskaScaleY, alaskaTranslateX, alaskaTranslateY, showCounties]);
   
   return (
-    <div className="App" style={{ height: '100vh', width: '100%', overflow: 'hidden', position: 'relative' }}>
-      <MapComponent showCounties={showCounties} />
+    <div className="App" style={{ height: '100vh', width: '100%', overflow: 'hidden', display: 'flex' }}>
+      <div className={`map-container ${isPanelCollapsed ? 'panel-collapsed' : ''}`}>
+        <MapComponent showCounties={showCounties} />
+      </div>
+      
       <ControlPanel
         countyToggle={showCounties}
         onCountyToggle={handleCountyToggle}
