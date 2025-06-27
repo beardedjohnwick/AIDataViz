@@ -1,5 +1,6 @@
 import React from 'react';
 import { GeoJSON, useMap } from 'react-leaflet';
+import './MapStyles.css';
 
 function StateLayers({ data, onStateSelected }) {
   // Get access to the map instance
@@ -15,6 +16,17 @@ function StateLayers({ data, onStateSelected }) {
 
   // Function to handle hover and click events
   const onEachFeature = (feature, layer) => {
+    // Add tooltip with state name
+    if (feature.properties && feature.properties.name) {
+      layer.bindTooltip(feature.properties.name, {
+        permanent: false,
+        direction: 'auto',
+        className: 'state-tooltip',
+        sticky: true, // Makes tooltip follow the mouse
+        offset: [10, 0] // Small offset from cursor
+      });
+    }
+
     layer.on({
       mouseover: (e) => {
         const layer = e.target;
@@ -31,6 +43,9 @@ function StateLayers({ data, onStateSelected }) {
         });
       },
       click: (e) => {
+        // Prevent default behavior that might cause focus styling
+        e.originalEvent.preventDefault();
+        
         // Get the bounds of the clicked state
         const bounds = e.target.getBounds();
         
@@ -58,6 +73,7 @@ function StateLayers({ data, onStateSelected }) {
       data={data} 
       style={stateStyle}
       onEachFeature={onEachFeature}
+      className="map-feature-no-focus"
     />
   );
 }

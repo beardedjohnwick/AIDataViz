@@ -17,18 +17,30 @@ L.Icon.Default.mergeOptions({
 // Add basic CSS styles
 const style = document.createElement('style');
 style.textContent = `
-  body {
+  * {
+    box-sizing: border-box;
+  }
+  
+  html, body {
     margin: 0;
     padding: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+  
+  body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
       'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
       sans-serif;
   }
   
+  #root {
+    height: 100%;
+  }
+  
   .App {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
+    height: 100%;
+    width: 100%;
   }
 `;
 document.head.appendChild(style);

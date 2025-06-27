@@ -8,6 +8,8 @@ import { convertTopoToGeoStates, convertTopoToGeoCounties } from '../data/geoUti
 // Import layer components
 import StateLayers from './StateLayers';
 import CountyLayers from './CountyLayers';
+import ControlPanel from './ControlPanel';
+import './MapStyles.css';
 
 // Component to handle zoom events
 function ZoomHandler({ setZoomLevel }) {
@@ -109,71 +111,50 @@ function MapComponent() {
   }
 
   return (
-    <div style={{ height: '100vh', width: '100%', position: 'relative' }}>
-      {/* Control panel */}
-      <div style={{
-        position: 'absolute',
-        top: '10px',
-        right: '10px',
-        zIndex: 1000,
-        backgroundColor: 'white',
-        padding: '10px',
-        borderRadius: '4px',
-        boxShadow: '0 0 10px rgba(0,0,0,0.2)'
-      }}>
-        <div style={{ marginBottom: '10px' }}>
-          <label>
-            <input 
-              type="checkbox" 
-              checked={countyToggle} 
-              onChange={handleCountyToggle} 
-            />
-            {' '}Show County Lines
-          </label>
-        </div>
-        
+    <div className="app-container">
+      {/* Control panel as a separate panel */}
+      <ControlPanel
+        countyToggle={countyToggle}
+        onCountyToggle={handleCountyToggle}
+      />
+
+      {/* Map container */}
+      <div className="map-container">
         {/* Reset button - shown when a state or county is selected */}
         {(stateSelected || countySelected) && (
-          <button 
-            onClick={resetMapView}
-            style={{
-              padding: '5px 10px',
-              backgroundColor: '#4285f4',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              display: 'block',
-              width: '100%'
-            }}
-          >
-            Reset Map View
-          </button>
+          <div className="reset-button-container">
+            <button 
+              onClick={resetMapView}
+              className="reset-button"
+            >
+              Reset Map View
+            </button>
+          </div>
         )}
+        
+        <MapContainer
+          center={center}
+          zoom={zoom}
+          style={{ height: '100%', width: '100%', background: '#ffffff' }}
+          zoomControl={true}
+          doubleClickZoom={true}
+          scrollWheelZoom={true}
+          dragging={true}
+          minZoom={5}
+        >
+          {/* Render states using StateLayers component */}
+          {statesData && <StateLayers data={statesData} onStateSelected={handleStateSelected} />}
+          
+          {/* Render counties using CountyLayers component */}
+          {showCounties && countiesData && <CountyLayers data={countiesData} onCountySelected={handleCountySelected} />}
+          
+          {/* Component to handle zoom events */}
+          <ZoomHandler setZoomLevel={setZoomLevel} />
+          
+          {/* Component to handle map reference */}
+          <MapController mapRef={mapRef} defaultCenter={center} defaultZoom={zoom} />
+        </MapContainer>
       </div>
-
-      <MapContainer
-        center={center}
-        zoom={zoom}
-        style={{ height: '100%', width: '100%', background: '#ffffff' }}
-        zoomControl={true}
-        doubleClickZoom={true}
-        scrollWheelZoom={true}
-        dragging={true}
-        minZoom={5}
-      >
-        {/* Render states using StateLayers component */}
-        {statesData && <StateLayers data={statesData} onStateSelected={handleStateSelected} />}
-        
-        {/* Render counties using CountyLayers component */}
-        {showCounties && countiesData && <CountyLayers data={countiesData} onCountySelected={handleCountySelected} />}
-        
-        {/* Component to handle zoom events */}
-        <ZoomHandler setZoomLevel={setZoomLevel} />
-        
-        {/* Component to handle map reference */}
-        <MapController mapRef={mapRef} defaultCenter={center} defaultZoom={zoom} />
-      </MapContainer>
     </div>
   );
 }
