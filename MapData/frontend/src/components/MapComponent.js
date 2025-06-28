@@ -83,10 +83,13 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties, onFeatureSelect
           // Check if this is a state or county feature
           const isCounty = feature.properties && (feature.properties.GEOID || feature.id && feature.id.toString().length > 2);
           
+          // Get the current style from the style function to preserve dynamic styling
+          const currentStyle = typeof style === 'function' ? style(feature) : style;
+          
           // Store the original style to restore it on mouseout
           const originalStyle = {
-            fillColor: 'transparent',
-            fillOpacity: 0,
+            fillColor: currentStyle.fillColor || 'transparent',
+            fillOpacity: currentStyle.fillOpacity !== undefined ? currentStyle.fillOpacity : 0,
             weight: layer.options.weight,
             color: layer.options.color,
             opacity: layer.options.opacity
@@ -116,9 +119,15 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties, onFeatureSelect
             layer.on({
               mouseover: (e) => {
                 const layer = e.target;
+                // Add a semi-transparent gray overlay that allows the true color to show through
+                const currentFillColor = originalStyle.fillColor || 'transparent';
+                const currentOpacity = originalStyle.fillOpacity || 0;
+                
                 layer.setStyle({
-                  fillColor: '#cccccc',
-                  fillOpacity: 0.5
+                  fillColor: currentFillColor,
+                  fillOpacity: currentOpacity + 0.2, // Increase opacity slightly
+                  weight: originalStyle.weight + 1, // Make border slightly thicker
+                  color: '#555555' // Darker border on hover
                 });
               },
               mouseout: (e) => {
@@ -147,10 +156,17 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties, onFeatureSelect
             layer.on({
               mouseover: (e) => {
                 const layer = e.target;
+                // Add a semi-transparent gray overlay that allows the true color to show through
+                const currentFillColor = originalStyle.fillColor || 'transparent';
+                const currentOpacity = originalStyle.fillOpacity || 0;
+                
                 layer.setStyle({
-                  fillColor: '#cccccc',
-                  fillOpacity: 0.5
+                  fillColor: currentFillColor,
+                  fillOpacity: currentOpacity + 0.2, // Increase opacity slightly
+                  weight: originalStyle.weight + 1, // Make border slightly thicker
+                  color: '#555555' // Darker border on hover
                 });
+                
                 if (!L.Browser.ie && !L.Browser.opera && !L.Browser.edge) {
                   layer.bringToFront();
                 }
@@ -206,6 +222,14 @@ const MapComponent = ({ showCounties = true }) => {
   const [error, setError] = useState(null);
   const [isZoomed, setIsZoomed] = useState(false);
   const mapRef = useRef(null);
+  
+  // State variable to store highlighted states
+  // Keys are state FIPS codes, values are fill colors
+  const [highlightedStates, setHighlightedStates] = useState({});
+  
+  // State variable to store highlighted counties
+  // Keys are county FIPS codes, values are fill colors
+  const [highlightedCounties, setHighlightedCounties] = useState({});
   
   // Define map bounds to restrict dragging
   // These bounds restrict primarily the top-left direction while allowing more freedom in other directions
@@ -722,11 +746,28 @@ const MapComponent = ({ showCounties = true }) => {
     alaskaTranslateY
   ]);
 
-  // Style for the state borders
-  const stateStyle = {
-    color: 'black',
-    weight: 1,
-    fillOpacity: 0
+  // Style for the state borders with dynamic highlighting
+  const stateStyleFunction = (feature) => {
+    // Get the FIPS code from the feature
+    const fipsCode = feature.id || 
+                    (feature.properties && (feature.properties.fips_code || feature.properties.STATEFP));
+    
+    // Check if this state is highlighted
+    if (fipsCode && highlightedStates[fipsCode]) {
+      return {
+        color: 'black',
+        weight: 1,
+        fillColor: highlightedStates[fipsCode],
+        fillOpacity: 0.7
+      };
+    }
+    
+    // Default style for states
+    return {
+      color: 'black',
+      weight: 1,
+      fillOpacity: 0
+    };
   };
 
   // Style for the county borders
@@ -736,8 +777,22 @@ const MapComponent = ({ showCounties = true }) => {
     fillOpacity: 0
   };
 
-  // Special style function to highlight Mahnomen County
+  // Style function to highlight counties
   const countyStyleFunction = (feature) => {
+    // Get the FIPS code from the feature
+    const fipsCode = feature.id || 
+                    (feature.properties && (feature.properties.GEOID || feature.properties.fips_code));
+    
+    // Check if this county is highlighted
+    if (fipsCode && highlightedCounties[fipsCode]) {
+      return {
+        color: '#444',
+        weight: 0.5,
+        fillColor: highlightedCounties[fipsCode],
+        fillOpacity: 0.7
+      };
+    }
+    
     // Check if this is Mahnomen County
     const isMahnomen = feature.id === "27087" || 
                       (feature.properties && feature.properties.name === "Mahnomen");
@@ -753,6 +808,37 @@ const MapComponent = ({ showCounties = true }) => {
     
     return countyStyle;
   };
+
+  // Temporary useEffect for testing dynamic styling
+  // This will highlight California and Texas after a 2 second delay
+  useEffect(() => {
+    // TEMPORARY FOR TESTING ONLY - To be removed in future steps
+    const timer = setTimeout(() => {
+      setHighlightedStates({
+        '06': 'red',    // California
+        '48': 'blue',   // Texas
+        '36': 'green',  // New York
+        '12': 'purple'  // Florida
+      });
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Temporary useEffect for testing dynamic county styling
+  // TEMPORARY FOR TESTING ONLY - To be removed in future steps
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setHighlightedCounties({
+        '06037': 'green',  // Los Angeles County, CA
+        '48201': 'purple', // Harris County, TX
+        '17031': 'orange', // Cook County, IL
+        '36061': 'blue'    // New York County, NY
+      });
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <>
@@ -776,7 +862,7 @@ const MapComponent = ({ showCounties = true }) => {
         {transformedStateData && (
           <GeoJSONWithUpdates 
             data={transformedStateData} 
-            style={stateStyle}
+            style={stateStyleFunction}
             zIndex={1}
             showCounties={showCounties}
             onFeatureSelected={handleFeatureSelected}
@@ -785,7 +871,7 @@ const MapComponent = ({ showCounties = true }) => {
         {showCounties && transformedCountyData && (
           <GeoJSONWithUpdates 
             data={transformedCountyData} 
-            style={countyStyle}
+            style={countyStyleFunction}
             zIndex={2}  // Higher zIndex to ensure county tooltips appear on top
             showCounties={showCounties}
             onFeatureSelected={handleFeatureSelected}
