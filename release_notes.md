@@ -1,3 +1,18 @@
+# v1.6.5 - Mock LLM & Heatmap Logic Testing
+
+## Major Changes
+- Added mock LLM utility for testing natural language processing
+- Implemented color utilities for heatmap visualization
+- Enhanced control panel with improved styling
+- Updated map component for better heatmap rendering
+
+## Frontend Changes
+- Created mockLLM.js utility for simulating LLM responses
+- Added colorUtils.js for generating and managing color schemes
+- Updated ControlPanel.js with improved UI for command input
+- Enhanced MapComponent.js with heatmap rendering capabilities
+- Refined MapStyles.css for better visual presentation
+
 # v1.6.4 - NLP Dynamic Styling (Intermediary Step for LLM Integration)
 
 ## Major Changes
