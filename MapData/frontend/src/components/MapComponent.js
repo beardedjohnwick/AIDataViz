@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import './MapStyles.css';
@@ -214,7 +214,7 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties, onFeatureSelect
 /**
  * Leaflet map component that displays US state and county boundaries
  */
-const MapComponent = ({ showCounties = true }) => {
+const MapComponent = forwardRef(({ showCounties = true }, ref) => {
   const [stateGeoJsonData, setStateGeoJsonData] = useState(null);
   const [countyGeoJsonData, setCountyGeoJsonData] = useState(null);
   const [statesLoading, setStatesLoading] = useState(true);
@@ -223,13 +223,13 @@ const MapComponent = ({ showCounties = true }) => {
   const [isZoomed, setIsZoomed] = useState(false);
   const mapRef = useRef(null);
   
-  // State variable to store highlighted states
-  // Keys are state FIPS codes, values are fill colors
-  const [highlightedStates, setHighlightedStates] = useState({});
-  
   // State variable to store highlighted counties
   // Keys are county FIPS codes, values are fill colors
   const [highlightedCounties, setHighlightedCounties] = useState({});
+  
+  // State variable to store highlighted states
+  // Keys are state FIPS codes, values are fill colors
+  const [highlightedStates, setHighlightedStates] = useState({});
   
   // Define map bounds to restrict dragging
   // These bounds restrict primarily the top-left direction while allowing more freedom in other directions
@@ -746,7 +746,68 @@ const MapComponent = ({ showCounties = true }) => {
     alaskaTranslateY
   ]);
 
-  // Style for the state borders with dynamic highlighting
+  // Define a hardcoded dataset for states with population data
+  const stateData = {
+    '06': { population: 39000000, color: 'red' },     // California
+    '48': { population: 30000000, color: 'blue' },    // Texas
+    '12': { population: 22000000, color: 'green' },   // Florida
+    '36': { population: 19000000, color: 'orange' },  // New York
+    '17': { population: 12500000, color: 'purple' },  // Illinois
+    '42': { population: 13000000, color: 'teal' },    // Pennsylvania
+    '13': { population: 11000000, color: 'brown' },   // Georgia
+    '26': { population: 10000000, color: 'darkgreen' } // Michigan
+  };
+
+  // Function to handle map commands from the control panel
+  const handleMapCommand = (commandString) => {
+    if (!commandString) return;
+    
+    // Convert to lowercase for case-insensitive matching
+    const command = commandString.toLowerCase();
+    
+    if (command === 'highlight california red') {
+      setHighlightedStates({ '06': 'red' });
+    } 
+    else if (command === 'highlight texas blue') {
+      setHighlightedStates({ '48': 'blue' });
+    }
+    else if (command === 'clear highlights') {
+      setHighlightedStates({});
+      setHighlightedCounties({});
+    }
+    else {
+      console.warn("Unknown command:", commandString);
+    }
+  };
+
+  // Function to determine state style based on population data
+  const getStyleForState = (feature) => {
+    // Get the FIPS code from the feature
+    const fipsCode = feature.id || 
+                    (feature.properties && (feature.properties.fips_code || feature.properties.STATEFP));
+    
+    // Check if this state exists in our data
+    if (fipsCode && stateData[fipsCode]) {
+      // Apply highlight style if population is greater than 20 million
+      if (stateData[fipsCode].population > 20000000) {
+        return {
+          color: 'black',
+          weight: 1,
+          fillColor: stateData[fipsCode].color,
+          fillOpacity: 0.7
+        };
+      }
+    }
+    
+    // Default style for states
+    return {
+      color: 'black',
+      weight: 1,
+      fillOpacity: 0
+    };
+  };
+
+  // Style function for states using our data-driven function
   const stateStyleFunction = (feature) => {
     // Get the FIPS code from the feature
     const fipsCode = feature.id || 
@@ -762,7 +823,6 @@ const MapComponent = ({ showCounties = true }) => {
       };
     }
     
-    // Default style for states
     return {
       color: 'black',
       weight: 1,
@@ -809,36 +869,10 @@ const MapComponent = ({ showCounties = true }) => {
     return countyStyle;
   };
 
-  // Temporary useEffect for testing dynamic styling
-  // This will highlight California and Texas after a 2 second delay
-  useEffect(() => {
-    // TEMPORARY FOR TESTING ONLY - To be removed in future steps
-    const timer = setTimeout(() => {
-      setHighlightedStates({
-        '06': 'red',    // California
-        '48': 'blue',   // Texas
-        '36': 'green',  // New York
-        '12': 'purple'  // Florida
-      });
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Temporary useEffect for testing dynamic county styling
-  // TEMPORARY FOR TESTING ONLY - To be removed in future steps
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setHighlightedCounties({
-        '06037': 'green',  // Los Angeles County, CA
-        '48201': 'purple', // Harris County, TX
-        '17031': 'orange', // Cook County, IL
-        '36061': 'blue'    // New York County, NY
-      });
-    }, 2000);
-    
-    return () => clearTimeout(timer);
-  }, []);
+  // Expose methods to parent component through ref
+  useImperativeHandle(ref, () => ({
+    handleMapCommand
+  }));
 
   return (
     <>
@@ -955,6 +989,6 @@ const MapComponent = ({ showCounties = true }) => {
       </div>
     </>
   );
-};
+});
 
-export default MapComponent; 
+export default MapComponent;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import MapComponent from './components/MapComponent';
 import ControlPanel from './components/ControlPanel';
 import testApiConnection from './test-api';
@@ -7,6 +7,9 @@ import { HAWAII_CONFIG, ALASKA_CONFIG } from './data/geoUtils';
 function App() {
   const [showCounties, setShowCounties] = useState(false);
   const [showAreaInTooltip, setShowAreaInTooltip] = useState(false);
+  
+  // Create a ref to access the MapComponent
+  const mapComponentRef = useRef(null);
   
   // Hawaii transformation settings
   const [hawaiiScale, setHawaiiScale] = useState(HAWAII_CONFIG.defaults.scale);
@@ -32,6 +35,13 @@ function App() {
   
   const handlePanelCollapseChange = (isCollapsed) => {
     setIsPanelCollapsed(isCollapsed);
+  };
+  
+  // Handler for map commands
+  const handleMapCommand = (command) => {
+    if (mapComponentRef.current && mapComponentRef.current.handleMapCommand) {
+      mapComponentRef.current.handleMapCommand(command);
+    }
   };
   
   // Handler for Hawaii scale change
@@ -144,7 +154,10 @@ function App() {
   return (
     <div className="App" style={{ height: '100vh', width: '100%', overflow: 'hidden', display: 'flex' }}>
       <div className={`map-container ${isPanelCollapsed ? 'panel-collapsed' : ''}`}>
-        <MapComponent showCounties={showCounties} />
+        <MapComponent 
+          ref={mapComponentRef}
+          showCounties={showCounties} 
+        />
       </div>
       
       <ControlPanel
@@ -153,6 +166,7 @@ function App() {
         showAreaInTooltip={showAreaInTooltip}
         onAreaToggle={handleAreaToggle}
         onCollapseChange={handlePanelCollapseChange}
+        onCommandSubmit={handleMapCommand}
       />
       
       {/* Hidden Hawaii transformation controls - for debugging only */}

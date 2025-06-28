@@ -1,3 +1,45 @@
+# v1.6.4 - NLP Dynamic Styling (Intermediary Step for LLM Integration)
+
+## Major Changes
+- Implemented natural language command processing for map styling
+- Added command input interface in the Control Panel
+- Created framework for dynamic map styling through text commands
+- Prepared foundation for future LLM integration
+
+## Frontend Changes
+- Updated App.js to pass commands from ControlPanel to MapComponent
+- Enhanced MapComponent with forwardRef and useImperativeHandle for command handling
+- Added command processing functionality with support for basic styling commands
+- Implemented command input UI in ControlPanel with help text
+- Enhanced MapStyles.css with styling for command input elements
+
+# v1.7.0 - Natural Language Command Input UI
+
+## Major Changes
+- Added text input field for map commands in the Control Panel
+- Implemented submit button for command execution
+- Prepared UI foundation for natural language interaction with the map
+
+## Frontend Changes
+- Updated ControlPanel.js with new command input section
+- Added command input field and submit button
+- Enhanced MapStyles.css with styling for the new UI elements
+- Implemented basic command logging to console
+
+# v1.6.3 - Dynamic State and County Styling
+
+## Major Changes
+- Implemented dynamic styling for states and counties
+- Enhanced map visualization with customizable color schemes
+- Improved interactive feedback for selected geographic features
+- Optimized rendering performance for complex styling operations
+
+## Frontend Changes
+- Updated MapComponent.js with dynamic style handling
+- Added support for custom color schemes based on data attributes
+- Enhanced state and county selection visual feedback
+- Improved rendering efficiency for styled geographic features
+
 # v1.6.2 - Reset View Improvement
 
 ## Major Changes

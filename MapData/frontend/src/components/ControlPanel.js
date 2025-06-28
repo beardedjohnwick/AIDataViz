@@ -6,15 +6,34 @@ function ControlPanel({
   onCountyToggle,
   showAreaInTooltip,
   onAreaToggle,
-  onCollapseChange
+  onCollapseChange,
+  onCommandSubmit
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [commandInput, setCommandInput] = useState('');
   
   const togglePanel = () => {
     const newCollapsedState = !collapsed;
     setCollapsed(newCollapsedState);
     if (onCollapseChange) {
       onCollapseChange(newCollapsedState);
+    }
+  };
+  
+  const handleCommandChange = (e) => {
+    setCommandInput(e.target.value);
+  };
+  
+  const handleCommandSubmit = () => {
+    if (commandInput.trim() && onCommandSubmit) {
+      onCommandSubmit(commandInput);
+      setCommandInput('');
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && commandInput.trim()) {
+      handleCommandSubmit();
     }
   };
 
@@ -32,6 +51,37 @@ function ControlPanel({
       </div>
       
       <div className="control-panel-content">
+        {/* Map Command Input Section */}
+        <div className="control-panel-section">
+          <h4 className="section-title">Map Commands</h4>
+          <div className="command-input-container">
+            <input
+              type="text"
+              className="command-input"
+              placeholder="Type map command here..."
+              value={commandInput}
+              onChange={handleCommandChange}
+              onKeyPress={handleKeyPress}
+              aria-label="Map command input"
+            />
+            <button 
+              className="command-submit-button"
+              onClick={handleCommandSubmit}
+              aria-label="Submit command"
+            >
+              Submit
+            </button>
+          </div>
+          <div className="command-help">
+            <p>Available commands:</p>
+            <ul>
+              <li>highlight California red</li>
+              <li>highlight Texas blue</li>
+              <li>clear highlights</li>
+            </ul>
+          </div>
+        </div>
+        
         <div className="control-panel-section">
           <label className="control-toggle">
             <input 
