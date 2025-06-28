@@ -73,12 +73,13 @@ function ControlPanel({
             </button>
           </div>
           <div className="command-help">
-            <p>Available commands:</p>
+            <p>Try these commands:</p>
             <ul>
               <li>highlight California red</li>
               <li>highlight Texas blue</li>
               <li>clear highlights</li>
             </ul>
+            <p className="command-note">Commands are interpreted by a mock LLM and are case-insensitive.</p>
           </div>
         </div>
         

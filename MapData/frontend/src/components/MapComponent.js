@@ -17,6 +17,8 @@ import {
   setAlaskaTransformation, 
   ALASKA_CONFIG 
 } from '../data/geoUtils';
+import { interpretCommand } from '../utils/mockLLM';
+import { getHeatmapColor, generateHeatmapLegend } from '../utils/colorUtils';
 
 // Component to handle zooming to a feature when clicked
 const ZoomToFeature = ({ featureRef, triggerZoom }) => {
@@ -231,6 +233,11 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
   // Keys are state FIPS codes, values are fill colors
   const [highlightedStates, setHighlightedStates] = useState({});
   
+  // Heat map state variables
+  const [heatmapActive, setHeatmapActive] = useState(false);
+  const [heatmapType, setHeatmapType] = useState('state'); // 'state' or 'county'
+  const [heatmapColorScheme, setHeatmapColorScheme] = useState('blue-red');
+  
   // Define map bounds to restrict dragging
   // These bounds restrict primarily the top-left direction while allowing more freedom in other directions
   const maxBounds = [
@@ -267,6 +274,81 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     translateX: alaskaTranslateX,
     translateY: alaskaTranslateY
   });
+
+  // Mock data for heat map demonstration
+  const mockStateData = {
+    '01': 0.67, // Alabama
+    '04': 0.89, // Arizona
+    '05': 0.45, // Arkansas
+    '06': 0.95, // California
+    '08': 0.72, // Colorado
+    '09': 0.58, // Connecticut
+    '10': 0.37, // Delaware
+    '12': 0.83, // Florida
+    '13': 0.71, // Georgia
+    '16': 0.25, // Idaho
+    '17': 0.65, // Illinois
+    '18': 0.52, // Indiana
+    '19': 0.31, // Iowa
+    '20': 0.28, // Kansas
+    '21': 0.42, // Kentucky
+    '22': 0.63, // Louisiana
+    '23': 0.15, // Maine
+    '24': 0.55, // Maryland
+    '25': 0.61, // Massachusetts
+    '26': 0.48, // Michigan
+    '27': 0.33, // Minnesota
+    '28': 0.57, // Mississippi
+    '29': 0.44, // Missouri
+    '30': 0.12, // Montana
+    '31': 0.23, // Nebraska
+    '32': 0.78, // Nevada
+    '33': 0.21, // New Hampshire
+    '34': 0.59, // New Jersey
+    '36': 0.76, // New York
+    '37': 0.68, // North Carolina
+    '38': 0.09, // North Dakota
+    '39': 0.54, // Ohio
+    '40': 0.47, // Oklahoma
+    '41': 0.53, // Oregon
+    '42': 0.62, // Pennsylvania
+    '44': 0.41, // Rhode Island
+    '45': 0.64, // South Carolina
+    '46': 0.11, // South Dakota
+    '47': 0.56, // Tennessee
+    '48': 0.81, // Texas
+    '49': 0.43, // Utah
+    '50': 0.18, // Vermont
+    '51': 0.66, // Virginia
+    '53': 0.69, // Washington
+    '54': 0.35, // West Virginia
+    '55': 0.39, // Wisconsin
+    '56': 0.14  // Wyoming
+  };
+  
+  // Mock data for county heat map (just a few counties for demonstration)
+  const mockCountyData = {
+    '06037': 0.92, // Los Angeles County, CA
+    '06075': 0.88, // San Francisco County, CA
+    '06085': 0.95, // Santa Clara County, CA
+    '17031': 0.78, // Cook County, IL
+    '36061': 0.89, // New York County, NY
+    '48201': 0.82, // Harris County, TX
+    '48113': 0.75, // Dallas County, TX
+    '53033': 0.81, // King County, WA
+    '06073': 0.86, // San Diego County, CA
+    '04013': 0.79, // Maricopa County, AZ
+    '48439': 0.73, // Tarrant County, TX
+    '06059': 0.84, // Orange County, CA
+    '12086': 0.87, // Miami-Dade County, FL
+    '48029': 0.71, // Bexar County, TX
+    '06065': 0.68, // Riverside County, CA
+    '06071': 0.65, // San Bernardino County, CA
+    '25017': 0.77, // Middlesex County, MA
+    '42101': 0.74, // Philadelphia County, PA
+    '12011': 0.80, // Broward County, FL
+    '27087': 0.50  // Mahnomen County, MN
+  };
 
   // Handle feature selection
   const handleFeatureSelected = (selected) => {
@@ -758,25 +840,146 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     '26': { population: 10000000, color: 'darkgreen' } // Michigan
   };
 
+  /**
+   * Applies a heat map visualization to states or counties based on data
+   * @param {Object} data - Object with FIPS codes as keys and values for the heat map
+   * @param {string} type - Either 'state' or 'county'
+   * @param {string} colorScheme - Color scheme to use
+   */
+  const applyHeatmap = (data, type = 'state', colorScheme = 'blue-red') => {
+    if (!data || Object.keys(data).length === 0) {
+      console.error('No data provided for heat map');
+      return;
+    }
+    
+    // Find min and max values in the dataset
+    const values = Object.values(data);
+    const minValue = Math.min(...values);
+    const maxValue = Math.max(...values);
+    
+    console.log(`Applying ${type} heat map with range: ${minValue} to ${maxValue}`);
+    
+    // Generate colors for each FIPS code
+    const colorMap = {};
+    Object.entries(data).forEach(([fips, value]) => {
+      colorMap[fips] = getHeatmapColor(value, minValue, maxValue, colorScheme);
+    });
+    
+    // Apply the colors to the appropriate state variable
+    if (type === 'state') {
+      setHighlightedStates(colorMap);
+    } else if (type === 'county') {
+      setHighlightedCounties(colorMap);
+    }
+    
+    // Update heat map state
+    setHeatmapActive(true);
+    setHeatmapType(type);
+    setHeatmapColorScheme(colorScheme);
+    
+    // Generate and log the legend (could be displayed in UI later)
+    const legend = generateHeatmapLegend(minValue, maxValue, 5, colorScheme);
+    console.log('Heat map legend:', legend);
+  };
+
+  /**
+   * Clears the current heat map visualization
+   */
+  const clearHeatmap = () => {
+    if (heatmapType === 'state') {
+      setHighlightedStates({});
+    } else if (heatmapType === 'county') {
+      setHighlightedCounties({});
+    }
+    setHeatmapActive(false);
+  };
+
+  // Add a temporary trigger for the heat map in useEffect
+  useEffect(() => {
+    // This will run once when the component mounts
+    const heatmapButton = document.createElement('button');
+    heatmapButton.textContent = 'Toggle State Heat Map';
+    heatmapButton.className = 'heatmap-toggle-button';
+    heatmapButton.style.position = 'absolute';
+    heatmapButton.style.top = '10px';
+    heatmapButton.style.left = '10px';
+    heatmapButton.style.zIndex = '1000';
+    heatmapButton.style.padding = '8px 12px';
+    heatmapButton.style.backgroundColor = '#fff';
+    heatmapButton.style.border = '2px solid #ccc';
+    heatmapButton.style.borderRadius = '4px';
+    heatmapButton.style.cursor = 'pointer';
+    
+    heatmapButton.addEventListener('click', () => {
+      if (heatmapActive && heatmapType === 'state') {
+        clearHeatmap();
+      } else {
+        applyHeatmap(mockStateData, 'state');
+      }
+    });
+    
+    // Create another button for county heat map
+    const countyHeatmapButton = document.createElement('button');
+    countyHeatmapButton.textContent = 'Toggle County Heat Map';
+    countyHeatmapButton.className = 'county-heatmap-toggle-button';
+    countyHeatmapButton.style.position = 'absolute';
+    countyHeatmapButton.style.top = '50px';
+    countyHeatmapButton.style.left = '10px';
+    countyHeatmapButton.style.zIndex = '1000';
+    countyHeatmapButton.style.padding = '8px 12px';
+    countyHeatmapButton.style.backgroundColor = '#fff';
+    countyHeatmapButton.style.border = '2px solid #ccc';
+    countyHeatmapButton.style.borderRadius = '4px';
+    countyHeatmapButton.style.cursor = 'pointer';
+    
+    countyHeatmapButton.addEventListener('click', () => {
+      if (heatmapActive && heatmapType === 'county') {
+        clearHeatmap();
+      } else {
+        applyHeatmap(mockCountyData, 'county');
+      }
+    });
+    
+    // Add buttons to the document body
+    document.body.appendChild(heatmapButton);
+    document.body.appendChild(countyHeatmapButton);
+    
+    // Cleanup function to remove buttons when component unmounts
+    return () => {
+      document.body.removeChild(heatmapButton);
+      document.body.removeChild(countyHeatmapButton);
+    };
+  }, [heatmapActive, heatmapType]);
+
   // Function to handle map commands from the control panel
   const handleMapCommand = (commandString) => {
     if (!commandString) return;
     
-    // Convert to lowercase for case-insensitive matching
-    const command = commandString.toLowerCase();
+    // Use the mock LLM to interpret the command
+    const result = interpretCommand(commandString);
     
-    if (command === 'highlight california red') {
-      setHighlightedStates({ '06': 'red' });
-    } 
-    else if (command === 'highlight texas blue') {
-      setHighlightedStates({ '48': 'blue' });
-    }
-    else if (command === 'clear highlights') {
-      setHighlightedStates({});
-      setHighlightedCounties({});
-    }
-    else {
-      console.warn("Unknown command:", commandString);
+    // Handle the action based on the result from the mock LLM
+    switch (result.action) {
+      case 'highlightState':
+        // Create a new object with the state FIPS code as key and color as value
+        setHighlightedStates({ [result.stateFips]: result.color });
+        break;
+      case 'clearHighlights':
+        setHighlightedStates({});
+        setHighlightedCounties({});
+        setHeatmapActive(false);
+        break;
+      case 'showHeatmap':
+        if (result.mapType === 'state') {
+          applyHeatmap(mockStateData, 'state', result.colorScheme || 'blue-red');
+        } else if (result.mapType === 'county') {
+          applyHeatmap(mockCountyData, 'county', result.colorScheme || 'blue-red');
+        }
+        break;
+      case 'unknown':
+      default:
+        console.warn("Unknown command:", commandString);
+        break;
     }
   };
 
@@ -871,7 +1074,9 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
 
   // Expose methods to parent component through ref
   useImperativeHandle(ref, () => ({
-    handleMapCommand
+    handleMapCommand,
+    applyHeatmap,
+    clearHeatmap
   }));
 
   return (
