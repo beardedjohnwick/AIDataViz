@@ -96,17 +96,20 @@ const GeoJSONWithUpdates = ({ data, style, zIndex, showCounties, onFeatureSelect
           const featureName = feature.properties?.name || 
                              (isCounty ? `County ID: ${feature.id}` : `State ID: ${feature.id}`);
           
-          // Add tooltip to display feature name
-          layer.bindTooltip(
-            `<div class="custom-tooltip"><strong>${featureName}</strong></div>`,
-            {
-              permanent: false,
-              direction: 'auto',
-              className: isCounty ? 'county-tooltip' : 'state-tooltip',
-              sticky: true, // Makes tooltip follow the mouse
-              offset: [10, 0] // Small offset from cursor
-            }
-          );
+          // Only show state tooltips when counties are not shown, or county tooltips when counties are shown
+          // When counties are shown, only bind tooltips to county features
+          if ((showCounties && isCounty) || (!showCounties && !isCounty)) {
+            layer.bindTooltip(
+              `<div class="custom-tooltip"><strong>${featureName}</strong></div>`,
+              {
+                permanent: false,
+                direction: 'auto',
+                className: isCounty ? 'county-tooltip' : 'state-tooltip',
+                sticky: true, // Makes tooltip follow the mouse
+                offset: [10, 0] // Small offset from cursor
+              }
+            );
+          }
           
           // Only add hover state to states when counties are not shown
           if (!showCounties && !isCounty) {
@@ -276,10 +279,8 @@ const MapComponent = ({ showCounties = true }) => {
         });
       };
       
-      // Add event handlers to close all tooltips when dragging starts or on mousedown/touch
+      // Only close tooltips when dragging or panning, not on clicks
       map.on('dragstart', closeAllTooltips);
-      map.on('mousedown', closeAllTooltips);
-      map.on('touchstart', closeAllTooltips);
       
       // Add a function to find and zoom to Mahnomen County
       window.findMahnomen = () => {
@@ -767,20 +768,20 @@ const MapComponent = ({ showCounties = true }) => {
           url="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
           attribution=""
         />
-        {showCounties && transformedCountyData && (
+        {transformedStateData && (
           <GeoJSONWithUpdates 
-            data={transformedCountyData} 
-            style={countyStyle}
+            data={transformedStateData} 
+            style={stateStyle}
             zIndex={1}
             showCounties={showCounties}
             onFeatureSelected={handleFeatureSelected}
           />
         )}
-        {transformedStateData && (
+        {showCounties && transformedCountyData && (
           <GeoJSONWithUpdates 
-            data={transformedStateData} 
-            style={stateStyle}
-            zIndex={2}
+            data={transformedCountyData} 
+            style={countyStyle}
+            zIndex={2}  // Higher zIndex to ensure county tooltips appear on top
             showCounties={showCounties}
             onFeatureSelected={handleFeatureSelected}
           />

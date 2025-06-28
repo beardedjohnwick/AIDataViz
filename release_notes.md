@@ -1,3 +1,30 @@
+# v1.6.1 - Tool Tip Fixes
+
+## Major Changes
+- Fixed tooltip behavior issues in map interactions
+- Improved tooltip positioning and styling
+- Enhanced tooltip visibility and user experience
+
+## Frontend Changes
+- Updated tooltip configuration in MapComponent.js
+- Added offset parameter to tooltips for better positioning
+- Made tooltips sticky to follow mouse cursor
+- Improved tooltip styling for better readability
+
+# v1.6.0 - UI Enhancements and Performance Improvements
+
+## Major Changes
+- Enhanced UI responsiveness and interaction feedback
+- Improved map rendering performance
+- Refined styling for better visual consistency
+- Optimized state and county boundary rendering
+
+## Frontend Changes
+- Updated MapStyles.css with improved hover and selection effects
+- Enhanced App.js with better component organization
+- Optimized rendering pipeline for smoother interactions
+- Improved tooltip behavior for better user experience
+
 # v1.5.3 - Map Bounds and Mahnomen County Fix
 
 ## Major Changes
