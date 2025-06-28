@@ -1,3 +1,30 @@
+# v1.6.7 - Population Data Comparison Fix
+
+## Major Changes
+- Fixed population data comparison in filtering operations
+- Added data type-specific comparison logic to handle different unit scales
+- Implemented debug logging for filter operations
+
+## Frontend Changes
+- Updated applyFilter function in MapComponent.js to handle population data correctly
+- Added unit conversion for population values (raw numbers to millions)
+- Added detailed debug logging to verify filter operations
+- Fixed issue where "highlight states with population over X million" wasn't working correctly
+
+# v1.6.6 - Enhanced Mock LLM
+
+## Major Changes
+- Enhanced mockLLM utility with improved natural language command processing
+- Added support for more specific heatmap commands with data type recognition
+- Implemented pattern matching for various heatmap command formats
+- Improved command interpretation accuracy for map visualization
+
+## Frontend Changes
+- Updated mockLLM.js with enhanced pattern recognition
+- Added support for different data types (crime_rates, population, income, unemployment)
+- Implemented flexible command parsing with regex patterns
+- Enhanced MapComponent.js to handle more detailed command interpretations
+
 # v1.6.5 - Mock LLM & Heatmap Logic Testing
 
 ## Major Changes

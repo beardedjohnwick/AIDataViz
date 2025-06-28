@@ -354,83 +354,31 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
   const mockDataSets = {
     // Crime rates data
     crime_rates: {
-      state: {
-        '06': 0.8, // California
-        '48': 0.2, // Texas
-        '36': 0.6, // New York
-        '12': 0.4, // Florida
-        '17': 0.7, // Illinois
-        '42': 0.5, // Pennsylvania
-        '13': 0.3, // Georgia
-        '26': 0.6  // Michigan
-      },
-      county: {
-        '06037': 0.9, // Los Angeles County, CA
-        '36061': 0.8, // New York County, NY
-        '17031': 0.7, // Cook County, IL
-        '48201': 0.3, // Harris County, TX
-        '06075': 0.5  // San Francisco County, CA
-      }
+      '06': 0.12, '48': 0.08, '36': 0.15, '12': 0.11, '17': 0.09,
+      '04': 0.07, '13': 0.14, '26': 0.10, '39': 0.08, '51': 0.06,
+      // County data
+      '06037': 0.18, '36061': 0.16, '17031': 0.15, '48201': 0.09, '06075': 0.11
     },
-    // Population data
+    // Population data (in millions)
     population: {
-      state: {
-        '06': 0.9, // California
-        '48': 0.7, // Texas
-        '36': 0.8, // New York
-        '12': 0.6, // Florida
-        '17': 0.5, // Illinois
-        '42': 0.4, // Pennsylvania
-        '13': 0.6, // Georgia
-        '26': 0.3  // Michigan
-      },
-      county: {
-        '06037': 0.8, // Los Angeles County, CA
-        '36061': 0.9, // New York County, NY
-        '17031': 0.8, // Cook County, IL
-        '48201': 0.7, // Harris County, TX
-        '06075': 0.6  // San Francisco County, CA
-      }
+      '06': 39.5, '48': 29.1, '12': 21.5, '36': 19.8, '17': 12.7,
+      '39': 11.8, '13': 10.7, '26': 10.0, '04': 7.3, '51': 8.6,
+      // County data (in millions)
+      '06037': 10.1, '36061': 1.6, '17031': 5.2, '48201': 4.7, '06075': 0.9
     },
-    // Income data
+    // Income data (median household income in thousands)
     income: {
-      state: {
-        '06': 0.7, // California
-        '48': 0.4, // Texas
-        '36': 0.6, // New York
-        '12': 0.3, // Florida
-        '17': 0.5, // Illinois
-        '42': 0.5, // Pennsylvania
-        '13': 0.4, // Georgia
-        '26': 0.4  // Michigan
-      },
-      county: {
-        '06037': 0.6, // Los Angeles County, CA
-        '36061': 0.9, // New York County, NY
-        '17031': 0.7, // Cook County, IL
-        '48201': 0.6, // Harris County, TX
-        '06075': 0.8  // San Francisco County, CA
-      }
+      '06': 75.2, '36': 68.5, '26': 59.2, '48': 61.9, '12': 55.7,
+      '51': 74.2, '17': 65.8, '39': 58.1, '04': 58.9, '13': 58.7,
+      // County data (in thousands)
+      '06037': 68.3, '36061': 86.5, '17031': 63.2, '48201': 60.7, '06075': 112.4
     },
-    // Unemployment data
+    // Unemployment data (rate as decimal)
     unemployment: {
-      state: {
-        '06': 0.6, // California
-        '48': 0.3, // Texas
-        '36': 0.5, // New York
-        '12': 0.4, // Florida
-        '17': 0.7, // Illinois
-        '42': 0.6, // Pennsylvania
-        '13': 0.5, // Georgia
-        '26': 0.8  // Michigan
-      },
-      county: {
-        '06037': 0.7, // Los Angeles County, CA
-        '36061': 0.5, // New York County, NY
-        '17031': 0.6, // Cook County, IL
-        '48201': 0.4, // Harris County, TX
-        '06075': 0.3  // San Francisco County, CA
-      }
+      '06': 0.074, '48': 0.063, '36': 0.081, '12': 0.057, '17': 0.069,
+      '04': 0.078, '13': 0.052, '26': 0.088, '39': 0.071, '51': 0.045,
+      // County data
+      '06037': 0.082, '36061': 0.076, '17031': 0.074, '48201': 0.068, '06075': 0.054
     }
   };
 
@@ -925,8 +873,8 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
   };
 
   /**
-   * Applies a heat map visualization to states or counties based on data
-   * @param {string} type - Either 'state' or 'county'
+   * Applies a heat map visualization to states or counties
+   * @param {string} type - The type of geographic unit to visualize ('state' or 'county')
    * @param {string} dataType - The type of data to visualize (crime_rates, population, etc.)
    * @param {string} colorScheme - Color scheme to use
    */
@@ -934,18 +882,28 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     // Get the appropriate data based on type and dataType
     let data;
     
-    // Check if we have specific data for this data type
-    if (mockDataSets[dataType] && mockDataSets[dataType][type]) {
-      data = mockDataSets[dataType][type];
+    // Check if we have data for this data type
+    if (mockDataSets[dataType]) {
+      // Filter the data based on the type (state or county)
+      data = {};
+      Object.entries(mockDataSets[dataType]).forEach(([fipsCode, value]) => {
+        // State FIPS codes are 2 digits, county FIPS codes are 5 digits
+        const isStateCode = fipsCode.length <= 2;
+        const isCountyCode = fipsCode.length > 2;
+        
+        if ((type === 'state' && isStateCode) || (type === 'county' && isCountyCode)) {
+          data[fipsCode] = value;
+        }
+      });
+      
       console.log(`Using ${dataType} data for ${type} heatmap`);
     } else {
-      // Fall back to default data if the specific data type isn't available
-      data = type === 'state' ? mockStateData : mockCountyData;
-      console.log(`No ${dataType} data available, using default data for ${type} heatmap`);
+      console.error(`No data available for data type: ${dataType}`);
+      return;
     }
     
     if (!data || Object.keys(data).length === 0) {
-      console.error('No data provided for heat map');
+      console.error(`No ${type} data available for heat map`);
       return;
     }
     
@@ -1049,6 +1007,96 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     };
   }, [heatmapActive, heatmapType]);
 
+  /**
+   * Applies a filter to highlight states or counties based on a condition
+   * @param {string} targetType - The type of geographic unit to filter ('state' or 'county')
+   * @param {string} dataType - The type of data to filter on
+   * @param {Object} condition - The condition to apply
+   */
+  const applyFilter = (targetType, dataType, condition) => {
+    console.log(`Applying filter: ${targetType} with ${dataType} ${condition.operator} ${condition.value} (${condition.originalValue})`);
+    
+    // Get the data for the specified data type
+    const data = mockDataSets[dataType];
+    
+    if (!data) {
+      console.error(`No data available for data type: ${dataType}`);
+      return;
+    }
+    
+    // Filter data based on condition
+    const filteredData = {};
+    Object.entries(data).forEach(([fipsCode, value]) => {
+      // Check if the FIPS code matches the target type
+      // State FIPS codes are 2 digits, county FIPS codes are 5 digits
+      const isStateCode = fipsCode.length <= 2;
+      const isCountyCode = fipsCode.length > 2;
+      
+      // Skip if the FIPS code doesn't match the target type
+      if ((targetType === 'state' && !isStateCode) || 
+          (targetType === 'county' && !isCountyCode)) {
+        return;
+      }
+      
+      // Adjust condition value based on data type
+      let adjustedConditionValue = condition.value;
+      if (dataType === 'population') {
+        // Population data is stored in millions, but user input is in raw numbers
+        adjustedConditionValue = condition.value / 1000000;
+      }
+      
+      let meetsCondition = false;
+      
+      switch (condition.operator) {
+        case 'gt':
+          meetsCondition = value > adjustedConditionValue;
+          break;
+        case 'lt':
+          meetsCondition = value < adjustedConditionValue;
+          break;
+        case 'eq':
+          meetsCondition = value === adjustedConditionValue;
+          break;
+        case 'gte':
+          meetsCondition = value >= adjustedConditionValue;
+          break;
+        case 'lte':
+          meetsCondition = value <= adjustedConditionValue;
+          break;
+      }
+      
+      if (meetsCondition) {
+        filteredData[fipsCode] = '#3388ff'; // Highlight color (blue)
+      }
+    });
+    
+    const matchCount = Object.keys(filteredData).length;
+    console.log(`Found ${matchCount} ${targetType}s that meet the condition`);
+    
+    // Add debug logging
+    console.log('Filter Debug:', {
+      dataType,
+      originalValue: condition.value,
+      adjustedValue: dataType === 'population' ? condition.value / 1000000 : condition.value,
+      operator: condition.operator,
+      sampleDataValue: Object.values(data)[0],
+      matchCount: Object.keys(filteredData).length
+    });
+    
+    // Apply highlighting to filtered results
+    if (targetType === 'state') {
+      setHighlightedStates(filteredData);
+      if (matchCount === 0) {
+        console.warn("No states match the specified condition");
+      }
+    } else {
+      setHighlightedCounties(filteredData);
+      if (matchCount === 0) {
+        console.warn("No counties match the specified condition");
+      }
+    }
+  };
+
   // Function to handle map commands from the control panel
   const handleMapCommand = (commandString) => {
     if (!commandString) return;
@@ -1081,9 +1129,17 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         // Use the enhanced heatmap command structure
         applyHeatmap(result.targetType, result.dataType, result.colorScheme);
         break;
+      case 'filter':
+        // Handle the new filter action
+        applyFilter(result.targetType, result.dataType, result.condition);
+        break;
       case 'unknown':
       default:
         console.warn("Unknown command:", commandString);
+        if (result.suggestions) {
+          console.warn("Try commands like:");
+          result.suggestions.forEach(suggestion => console.warn(`- '${suggestion}'`));
+        }
         break;
     }
   };
