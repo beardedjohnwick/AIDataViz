@@ -40,7 +40,7 @@ export function interpretCommand(commandText) {
     };
   }
   
-  // Check for heat map commands
+  // Check for heat map commands (legacy pattern)
   if (command.includes('show heat map') || command.includes('show heatmap')) {
     // Determine if it's state or county heat map
     const isCounty = command.includes('county') || command.includes('counties');
@@ -58,6 +58,57 @@ export function interpretCommand(commandText) {
       mapType: isCounty ? 'county' : 'state',
       colorScheme: colorScheme
     };
+  }
+  
+  // Check for enhanced heatmap commands with data type recognition
+  const heatmapPatterns = [
+    'show heatmap of',
+    'display heatmap for',
+    'create heatmap showing',
+    'heatmap',
+    'show .* heatmap'
+  ];
+  
+  // Check if any heatmap pattern matches
+  for (const pattern of heatmapPatterns) {
+    const regex = new RegExp(pattern);
+    if (regex.test(command)) {
+      // Determine the data type
+      let dataType = 'crime_rates'; // default
+      
+      if (command.includes('crime rate') || command.includes('crime rates') || command.includes(' crime ')) {
+        dataType = 'crime_rates';
+      } else if (command.includes('population')) {
+        dataType = 'population';
+      } else if (command.includes('income')) {
+        dataType = 'income';
+      } else if (command.includes('unemployment')) {
+        dataType = 'unemployment';
+      }
+      
+      // Determine if it's state or county level
+      let targetType = 'state'; // default
+      if (command.includes('county') || command.includes('counties')) {
+        targetType = 'county';
+      } else if (command.includes('state') || command.includes('states')) {
+        targetType = 'state';
+      }
+      
+      // Determine color scheme if specified
+      let colorScheme = 'blue-red'; // default
+      if (command.includes('green')) {
+        colorScheme = 'green-red';
+      } else if (command.includes('yellow')) {
+        colorScheme = 'yellow-red';
+      }
+      
+      return {
+        action: 'heatmap',
+        dataType: dataType,
+        targetType: targetType,
+        colorScheme: colorScheme
+      };
+    }
   }
   
   // Default case for unknown commands

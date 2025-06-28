@@ -349,6 +349,90 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     '12011': 0.80, // Broward County, FL
     '27087': 0.50  // Mahnomen County, MN
   };
+  
+  // Mock data sets for different data types
+  const mockDataSets = {
+    // Crime rates data
+    crime_rates: {
+      state: {
+        '06': 0.8, // California
+        '48': 0.2, // Texas
+        '36': 0.6, // New York
+        '12': 0.4, // Florida
+        '17': 0.7, // Illinois
+        '42': 0.5, // Pennsylvania
+        '13': 0.3, // Georgia
+        '26': 0.6  // Michigan
+      },
+      county: {
+        '06037': 0.9, // Los Angeles County, CA
+        '36061': 0.8, // New York County, NY
+        '17031': 0.7, // Cook County, IL
+        '48201': 0.3, // Harris County, TX
+        '06075': 0.5  // San Francisco County, CA
+      }
+    },
+    // Population data
+    population: {
+      state: {
+        '06': 0.9, // California
+        '48': 0.7, // Texas
+        '36': 0.8, // New York
+        '12': 0.6, // Florida
+        '17': 0.5, // Illinois
+        '42': 0.4, // Pennsylvania
+        '13': 0.6, // Georgia
+        '26': 0.3  // Michigan
+      },
+      county: {
+        '06037': 0.8, // Los Angeles County, CA
+        '36061': 0.9, // New York County, NY
+        '17031': 0.8, // Cook County, IL
+        '48201': 0.7, // Harris County, TX
+        '06075': 0.6  // San Francisco County, CA
+      }
+    },
+    // Income data
+    income: {
+      state: {
+        '06': 0.7, // California
+        '48': 0.4, // Texas
+        '36': 0.6, // New York
+        '12': 0.3, // Florida
+        '17': 0.5, // Illinois
+        '42': 0.5, // Pennsylvania
+        '13': 0.4, // Georgia
+        '26': 0.4  // Michigan
+      },
+      county: {
+        '06037': 0.6, // Los Angeles County, CA
+        '36061': 0.9, // New York County, NY
+        '17031': 0.7, // Cook County, IL
+        '48201': 0.6, // Harris County, TX
+        '06075': 0.8  // San Francisco County, CA
+      }
+    },
+    // Unemployment data
+    unemployment: {
+      state: {
+        '06': 0.6, // California
+        '48': 0.3, // Texas
+        '36': 0.5, // New York
+        '12': 0.4, // Florida
+        '17': 0.7, // Illinois
+        '42': 0.6, // Pennsylvania
+        '13': 0.5, // Georgia
+        '26': 0.8  // Michigan
+      },
+      county: {
+        '06037': 0.7, // Los Angeles County, CA
+        '36061': 0.5, // New York County, NY
+        '17031': 0.6, // Cook County, IL
+        '48201': 0.4, // Harris County, TX
+        '06075': 0.3  // San Francisco County, CA
+      }
+    }
+  };
 
   // Handle feature selection
   const handleFeatureSelected = (selected) => {
@@ -842,11 +926,24 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
 
   /**
    * Applies a heat map visualization to states or counties based on data
-   * @param {Object} data - Object with FIPS codes as keys and values for the heat map
    * @param {string} type - Either 'state' or 'county'
+   * @param {string} dataType - The type of data to visualize (crime_rates, population, etc.)
    * @param {string} colorScheme - Color scheme to use
    */
-  const applyHeatmap = (data, type = 'state', colorScheme = 'blue-red') => {
+  const applyHeatmap = (type = 'state', dataType = 'crime_rates', colorScheme = 'blue-red') => {
+    // Get the appropriate data based on type and dataType
+    let data;
+    
+    // Check if we have specific data for this data type
+    if (mockDataSets[dataType] && mockDataSets[dataType][type]) {
+      data = mockDataSets[dataType][type];
+      console.log(`Using ${dataType} data for ${type} heatmap`);
+    } else {
+      // Fall back to default data if the specific data type isn't available
+      data = type === 'state' ? mockStateData : mockCountyData;
+      console.log(`No ${dataType} data available, using default data for ${type} heatmap`);
+    }
+    
     if (!data || Object.keys(data).length === 0) {
       console.error('No data provided for heat map');
       return;
@@ -880,6 +977,7 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     // Generate and log the legend (could be displayed in UI later)
     const legend = generateHeatmapLegend(minValue, maxValue, 5, colorScheme);
     console.log('Heat map legend:', legend);
+    console.log(`Applied ${dataType} heatmap for ${type} level`);
   };
 
   /**
@@ -914,7 +1012,7 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       if (heatmapActive && heatmapType === 'state') {
         clearHeatmap();
       } else {
-        applyHeatmap(mockStateData, 'state');
+        applyHeatmap('state');
       }
     });
     
@@ -936,7 +1034,7 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       if (heatmapActive && heatmapType === 'county') {
         clearHeatmap();
       } else {
-        applyHeatmap(mockCountyData, 'county');
+        applyHeatmap('county');
       }
     });
     
@@ -955,8 +1053,11 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
   const handleMapCommand = (commandString) => {
     if (!commandString) return;
     
+    console.log("Processing command:", commandString);
+    
     // Use the mock LLM to interpret the command
     const result = interpretCommand(commandString);
+    console.log("Command interpretation:", result);
     
     // Handle the action based on the result from the mock LLM
     switch (result.action) {
@@ -971,10 +1072,14 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         break;
       case 'showHeatmap':
         if (result.mapType === 'state') {
-          applyHeatmap(mockStateData, 'state', result.colorScheme || 'blue-red');
+          applyHeatmap('state', 'crime_rates', result.colorScheme || 'blue-red');
         } else if (result.mapType === 'county') {
-          applyHeatmap(mockCountyData, 'county', result.colorScheme || 'blue-red');
+          applyHeatmap('county', 'crime_rates', result.colorScheme || 'blue-red');
         }
+        break;
+      case 'heatmap':
+        // Use the enhanced heatmap command structure
+        applyHeatmap(result.targetType, result.dataType, result.colorScheme);
         break;
       case 'unknown':
       default:
