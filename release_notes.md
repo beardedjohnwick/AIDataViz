@@ -1,3 +1,16 @@
+# v1.6.2 - Reset View Improvement
+
+## Major Changes
+- Enhanced Reset View functionality for better map navigation
+- Improved Reset View button visibility and user experience
+- Optimized map reset animation for smoother transitions
+
+## Frontend Changes
+- Updated ResetViewControl component to always display the reset button
+- Enhanced handleResetView function with improved animation parameters
+- Added noMoveStart parameter to prevent unnecessary event firing
+- Refined animation duration and easing for better user experience
+
 # v1.6.1 - Tool Tip Fixes
 
 ## Major Changes

@@ -252,7 +252,12 @@ const MapComponent = ({ showCounties = true }) => {
   // Reset view to default
   const handleResetView = () => {
     if (mapRef.current) {
-      mapRef.current.setView([37, -98.5795], 5);
+      mapRef.current.flyTo([37, -98.5795], 5, {
+        duration: 0.5,  // Animation duration in seconds
+        easeLinearity: 1,  // Smooth easing (lower values = smoother)
+        animate: true,  // Ensure animation is enabled
+        noMoveStart: true  // Don't fire movestart event
+      });
       setIsZoomed(false);
     }
   };
