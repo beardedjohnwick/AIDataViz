@@ -784,6 +784,7 @@ export function interpretCommand(commandText) {
   console.log('Input command:', commandText);
   console.log('Normalized command:', command);
   console.log('Is ambiguous:', isAmbiguousQuery(command));
+  console.log('Is simple highlight:', isSimpleHighlightCommand(command));
   console.log('Is ranking command:', isRankingCommand(command));
   console.log('Is comparison command:', isComparisonCommand(command));
   console.log('Contains "and":', command.includes(' and '));
@@ -796,7 +797,12 @@ export function interpretCommand(commandText) {
     return handleAmbiguousQuery(command);
   }
   
-  // Check for multi-color highlighting commands first
+  // Check for simple highlighting commands BEFORE multi-color commands
+  if (isSimpleHighlightCommand(command)) {
+    return parseSimpleHighlightCommand(command);
+  }
+  
+  // Check for multi-color highlighting commands
   if (isMultiColorCommand(command)) {
     return parseMultiColorCommand(command);
   }
@@ -1486,4 +1492,218 @@ const handleAmbiguousQuery = (command) => {
     suggestions: suggestions,
     category: category
   };
+};
+
+/**
+ * Detects simple highlighting commands before multi-color detection
+ * @param {string} command - The command to check
+ * @returns {boolean} True if it's a simple highlighting command
+ */
+const isSimpleHighlightCommand = (command) => {
+  // Pattern for "highlight [location] in [color]" (single location)
+  // Updated to handle state names with spaces like "new york"
+  const singleLocationPatterns = [
+    /\bhighlight\s+[\w\s]+\s+in\s+\w+$/,
+    /\bshow\s+[\w\s]+\s+in\s+\w+$/,
+    /\bdisplay\s+[\w\s]+\s+in\s+\w+$/
+  ];
+  
+  // Pattern for "highlight [location1, location2, location3] in [color]" (multiple locations)
+  const multipleLocationPatterns = [
+    /\bhighlight\s+[\w\s,]+\s+in\s+\w+$/,
+    /\bshow\s+[\w\s,]+\s+in\s+\w+$/,
+    /\bdisplay\s+[\w\s,]+\s+in\s+\w+$/
+  ];
+  
+  const isSingleLocation = singleLocationPatterns.some(pattern => pattern.test(command));
+  const isMultipleLocation = multipleLocationPatterns.some(pattern => pattern.test(command)) && command.includes(',');
+  
+  console.log('Simple highlight detection:', {
+    command,
+    isSingleLocation,
+    isMultipleLocation,
+    result: isSingleLocation || isMultipleLocation
+  });
+  
+  return isSingleLocation || isMultipleLocation;
+};
+
+/**
+ * Parses simple highlighting commands
+ * @param {string} command - The command to parse
+ * @returns {Object} Parsed command result
+ */
+const parseSimpleHighlightCommand = (command) => {
+  console.log('Parsing simple highlight command:', command);
+  
+  // Check if it's a multiple location command
+  const isMultipleLocations = command.includes(',');
+  
+  if (isMultipleLocations) {
+    return parseMultipleLocationHighlight(command);
+  } else {
+    return parseSingleLocationHighlight(command);
+  }
+};
+
+// New function for single location highlighting
+const parseSingleLocationHighlight = (command) => {
+  console.log('Parsing single location highlight:', command);
+  
+  // Extract location and color - updated to handle state names with spaces
+  const match = command.match(/\b(highlight|show|display)\s+([\w\s]+)\s+in\s+(\w+)$/);
+  
+  if (!match) {
+    return { 
+      action: 'unknown', 
+      suggestion: 'Could not parse single location highlight command' 
+    };
+  }
+  
+  const [, action, location, color] = match;
+  
+  console.log('Extracted single location:', { action, location, color });
+  
+  // Use existing state name mapping logic
+  const locationId = getStateIdFromName(location);
+  
+  if (!locationId) {
+    return { 
+      action: 'unknown', 
+      suggestion: `Could not find state "${location}". Try using full state names like "texas" or "california"` 
+    };
+  }
+  
+  return {
+    action: 'simple_highlight',
+    targetType: 'state',
+    locations: [{ id: locationId, name: location }],
+    color: color,
+    isMultiple: false
+  };
+};
+
+// New function for multiple location highlighting
+const parseMultipleLocationHighlight = (command) => {
+  console.log('Parsing multiple location highlight:', command);
+  
+  // Extract locations and color using regex
+  const match = command.match(/\b(highlight|show|display)\s+(.*?)\s+in\s+(\w+)$/);
+  
+  if (!match) {
+    return { 
+      action: 'unknown', 
+      suggestion: 'Could not parse multiple location highlight command' 
+    };
+  }
+  
+  const [, action, locationsString, color] = match;
+  
+  console.log('Extracted multiple locations:', { action, locationsString, color });
+  
+  // Split locations by comma and clean them up
+  const locationNames = locationsString
+    .split(',')
+    .map(loc => loc.trim())
+    .filter(loc => loc.length > 0);
+  
+  console.log('Parsed location names:', locationNames);
+  
+  // Map each location name to its ID
+  const locations = [];
+  const invalidLocations = [];
+  
+  for (const locationName of locationNames) {
+    const locationId = getStateIdFromName(locationName);
+    if (locationId) {
+      locations.push({ id: locationId, name: locationName });
+    } else {
+      invalidLocations.push(locationName);
+    }
+  }
+  
+  console.log('Valid locations:', locations);
+  console.log('Invalid locations:', invalidLocations);
+  
+  if (locations.length === 0) {
+    return { 
+      action: 'unknown', 
+      suggestion: `Could not find any valid states in "${locationsString}". Try using full state names like "texas, california, florida"` 
+    };
+  }
+  
+  if (invalidLocations.length > 0) {
+    console.warn(`Some locations were not recognized: ${invalidLocations.join(', ')}`);
+  }
+  
+  return {
+    action: 'simple_highlight',
+    targetType: 'state',
+    locations: locations,
+    color: color,
+    isMultiple: true,
+    invalidLocations: invalidLocations
+  };
+};
+
+// Helper function to get state ID from name
+const getStateIdFromName = (locationName) => {
+  // Map common state names to FIPS codes
+  const stateNameToFips = {
+    'texas': '48',
+    'california': '06',
+    'florida': '12',
+    'newyork': '36',
+    'new york': '36',
+    'illinois': '17',
+    'ohio': '39',
+    'georgia': '13',
+    'michigan': '26',
+    'arizona': '04',
+    'virginia': '51',
+    'alaska': '02',
+    'alabama': '01',
+    'arkansas': '05',
+    'colorado': '08',
+    'connecticut': '09',
+    'delaware': '10',
+    'hawaii': '15',
+    'idaho': '16',
+    'indiana': '18',
+    'iowa': '19',
+    'kansas': '20',
+    'kentucky': '21',
+    'louisiana': '22',
+    'maine': '23',
+    'maryland': '24',
+    'massachusetts': '25',
+    'minnesota': '27',
+    'mississippi': '28',
+    'missouri': '29',
+    'montana': '30',
+    'nebraska': '31',
+    'nevada': '32',
+    'newhampshire': '33',
+    'newjersey': '34',
+    'newmexico': '35',
+    'northcarolina': '37',
+    'northdakota': '38',
+    'oklahoma': '40',
+    'oregon': '41',
+    'pennsylvania': '42',
+    'rhodeisland': '44',
+    'southcarolina': '45',
+    'southdakota': '46',
+    'tennessee': '47',
+    'utah': '49',
+    'vermont': '50',
+    'washington': '53',
+    'westvirginia': '54',
+    'wisconsin': '55',
+    'wyoming': '56'
+  };
+  
+  // Normalize location name (lowercase, handle spaces)
+  const normalizedLocation = locationName.toLowerCase().trim();
+  return stateNameToFips[normalizedLocation];
 }; 

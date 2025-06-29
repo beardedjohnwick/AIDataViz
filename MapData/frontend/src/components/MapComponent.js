@@ -19,6 +19,7 @@ import {
 } from '../data/geoUtils';
 import { interpretCommand } from '../utils/mockLLM';
 import { getHeatmapColor, generateHeatmapLegend } from '../utils/colorUtils';
+import { testStatisticsLibrary } from '../utils/statisticsUtils';
 
 // Component to handle zooming to a feature when clicked
 const ZoomToFeature = ({ featureRef, triggerZoom }) => {
@@ -1486,6 +1487,40 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     });
   };
 
+  // Function to apply simple highlighting
+  const applySimpleHighlight = (targetType, locations, color, isMultiple = false, invalidLocations = []) => {
+    console.log('Applying simple highlight:', { targetType, locations, color, isMultiple, invalidLocations });
+    
+    // Create highlight data for all locations
+    const highlightData = {};
+    const locationNames = [];
+    
+    locations.forEach(location => {
+      highlightData[location.id] = color;
+      locationNames.push(location.name);
+    });
+    
+    // Apply highlighting
+    if (targetType === 'state') {
+      setHighlightedStates(highlightData);
+      
+      // Log results
+      if (isMultiple) {
+        console.log(`Highlighted ${locationNames.length} states in ${color}: ${locationNames.join(', ')}`);
+        if (invalidLocations.length > 0) {
+          console.warn(`Some locations were not recognized: ${invalidLocations.join(', ')}`);
+        }
+      } else {
+        console.log(`Highlighted ${locationNames[0]} (FIPS: ${locations[0].id}) in ${color}`);
+      }
+    } else {
+      setHighlightedCounties(highlightData);
+      console.log(`Highlighted ${locationNames.length} counties in ${color}: ${locationNames.join(', ')}`);
+    }
+    
+    console.log('Simple highlight applied successfully');
+  };
+
   // Function to handle map commands from the control panel
   const handleMapCommand = (commandString) => {
     if (!commandString) return;
@@ -1537,6 +1572,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       case 'comparison':
         // Handle the new comparison action
         applyComparison(result.targetType, result.firstMetric, result.secondMetric, result.operator);
+        break;
+      case 'simple_highlight':
+        // Handle the new simple highlight action
+        applySimpleHighlight(result.targetType, result.locations, result.color, result.isMultiple, result.invalidLocations);
         break;
       case 'clarify':
         // Handle clarification requests
@@ -2004,6 +2043,22 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       matchingStatesList: Object.keys(comparisonResults)
     });
   };
+
+  // Test function for statistics library integration
+  const testStatsIntegration = () => {
+    console.log('Testing statistics library integration...');
+    const success = testStatisticsLibrary();
+    if (success) {
+      console.log('Statistics library is ready for use!');
+    } else {
+      console.error('Statistics library integration failed!');
+    }
+  };
+
+  // Test statistics integration on component mount (temporary for verification)
+  useEffect(() => {
+    testStatsIntegration();
+  }, []);
 
   return (
     <>
