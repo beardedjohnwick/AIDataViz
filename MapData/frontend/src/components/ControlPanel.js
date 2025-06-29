@@ -72,15 +72,6 @@ function ControlPanel({
               Submit
             </button>
           </div>
-          <div className="command-help">
-            <p>Try these commands:</p>
-            <ul>
-              <li>highlight California red</li>
-              <li>highlight Texas blue</li>
-              <li>clear highlights</li>
-            </ul>
-            <p className="command-note">Commands are interpreted by a mock LLM and are case-insensitive.</p>
-          </div>
         </div>
         
         <div className="control-panel-section">
@@ -92,21 +83,6 @@ function ControlPanel({
             />
             <span className="toggle-label">Show County Lines</span>
           </label>
-        </div>
-        
-        <div className="control-panel-section">
-          <h4 className="section-title">Data</h4>
-          <div className="data-controls">
-            <p className="data-description">Select data to display on the map</p>
-            <label className="control-toggle">
-              <input 
-                type="checkbox" 
-                checked={showAreaInTooltip} 
-                onChange={onAreaToggle} 
-              />
-              <span className="toggle-label">Land Area</span>
-            </label>
-          </div>
         </div>
       </div>
     </div>

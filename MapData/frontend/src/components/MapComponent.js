@@ -1229,63 +1229,6 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     setHeatmapActive(false);
   };
 
-  // Add a temporary trigger for the heat map in useEffect
-  useEffect(() => {
-    // This will run once when the component mounts
-    const heatmapButton = document.createElement('button');
-    heatmapButton.textContent = 'Toggle State Heat Map';
-    heatmapButton.className = 'heatmap-toggle-button';
-    heatmapButton.style.position = 'absolute';
-    heatmapButton.style.top = '10px';
-    heatmapButton.style.left = '10px';
-    heatmapButton.style.zIndex = '1000';
-    heatmapButton.style.padding = '8px 12px';
-    heatmapButton.style.backgroundColor = '#fff';
-    heatmapButton.style.border = '2px solid #ccc';
-    heatmapButton.style.borderRadius = '4px';
-    heatmapButton.style.cursor = 'pointer';
-    
-    heatmapButton.addEventListener('click', () => {
-      if (heatmapActive && heatmapType === 'state') {
-        clearHeatmap();
-      } else {
-        applyHeatmap('state');
-      }
-    });
-    
-    // Create another button for county heat map
-    const countyHeatmapButton = document.createElement('button');
-    countyHeatmapButton.textContent = 'Toggle County Heat Map';
-    countyHeatmapButton.className = 'county-heatmap-toggle-button';
-    countyHeatmapButton.style.position = 'absolute';
-    countyHeatmapButton.style.top = '50px';
-    countyHeatmapButton.style.left = '10px';
-    countyHeatmapButton.style.zIndex = '1000';
-    countyHeatmapButton.style.padding = '8px 12px';
-    countyHeatmapButton.style.backgroundColor = '#fff';
-    countyHeatmapButton.style.border = '2px solid #ccc';
-    countyHeatmapButton.style.borderRadius = '4px';
-    countyHeatmapButton.style.cursor = 'pointer';
-    
-    countyHeatmapButton.addEventListener('click', () => {
-      if (heatmapActive && heatmapType === 'county') {
-        clearHeatmap();
-      } else {
-        applyHeatmap('county');
-      }
-    });
-    
-    // Add buttons to the document body
-    document.body.appendChild(heatmapButton);
-    document.body.appendChild(countyHeatmapButton);
-    
-    // Cleanup function to remove buttons when component unmounts
-    return () => {
-      document.body.removeChild(heatmapButton);
-      document.body.removeChild(countyHeatmapButton);
-    };
-  }, [heatmapActive, heatmapType]);
-
   /**
    * Applies a filter to highlight states or counties based on a condition
    * @param {string} targetType - The type of geographic unit to filter ('state' or 'county')

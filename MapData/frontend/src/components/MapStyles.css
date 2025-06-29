@@ -69,33 +69,6 @@
   transform: translateY(1px);
 }
 
-/* Heat Map Toggle Button Styles */
-.heatmap-toggle-button,
-.county-heatmap-toggle-button {
-  background-color: white;
-  border: 2px solid rgba(0, 0, 0, 0.2);
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 14px;
-  font-weight: bold;
-  color: #333;
-  cursor: pointer;
-  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
-  transition: all 0.3s ease;
-  margin-right: 10px;
-}
-
-.heatmap-toggle-button:hover,
-.county-heatmap-toggle-button:hover {
-  background-color: #f4f4f4;
-}
-
-.heatmap-toggle-button:active,
-.county-heatmap-toggle-button:active {
-  background-color: #e6e6e6;
-  transform: translateY(1px);
-}
-
 /* Heat Map Legend Styles */
 .heatmap-legend {
   position: absolute;
