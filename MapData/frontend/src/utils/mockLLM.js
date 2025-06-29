@@ -6,6 +6,15 @@
  * In a real application, this would be replaced with an actual LLM API call.
  */
 
+// Import analytical function registry
+import { 
+  analyticalFunctionRegistry, 
+  getFunctionByName, 
+  searchFunctions, 
+  getAvailableDataTypes,
+  isValidDataType 
+} from './analyticalFunctionRegistry.js';
+
 /**
  * Parses number expressions from text into numerical values
  * @param {string} text - The text containing a number expression
@@ -252,6 +261,44 @@ const isComparisonCommand = (command) => {
   ];
   
   return comparisonPatterns.some(pattern => pattern.test(command));
+};
+
+/**
+ * Checks if a command is an analytical function request
+ * @param {string} command - The command to check
+ * @returns {boolean} True if the command is an analytical function request
+ */
+const isAnalyticalCommand = (command) => {
+  const analyticalKeywords = [
+    'calculate', 'compute', 'find', 'show', 'get', 'what is', 'tell me',
+    'mean', 'average', 'median', 'sum', 'total', 'correlation', 'corr',
+    'standard deviation', 'std', 'variance', 'min', 'max', 'range',
+    'quartiles', 'summary', 'statistics', 'stats', 'describe'
+  ];
+  
+  const hasAnalyticalKeyword = analyticalKeywords.some(keyword => 
+    command.includes(keyword)
+  );
+  
+  // Also check if command contains any function names or aliases from registry
+  const allFunctionNames = [];
+  Object.values(analyticalFunctionRegistry).forEach(func => {
+    allFunctionNames.push(func.name);
+    allFunctionNames.push(...func.aliases);
+  });
+  
+  const hasFunctionName = allFunctionNames.some(funcName => 
+    command.includes(funcName.toLowerCase())
+  );
+  
+  console.log('Analytical command detection:', {
+    command,
+    hasAnalyticalKeyword,
+    hasFunctionName,
+    result: hasAnalyticalKeyword || hasFunctionName
+  });
+  
+  return hasAnalyticalKeyword || hasFunctionName;
 };
 
 /**
@@ -694,6 +741,170 @@ const parseComparisonCommand = (command) => {
 };
 
 /**
+ * Parses an analytical function command
+ * @param {string} command - The analytical command to parse
+ * @returns {Object} Parsed analytical command object
+ */
+const parseAnalyticalCommand = (command) => {
+  console.log('=== Parsing Analytical Command ===');
+  console.log('Input command:', command);
+  
+  // Extract function name using search
+  console.log('Calling searchFunctions with:', command);
+  const searchResults = searchFunctions(command);
+  console.log('Search results:', searchResults);
+  console.log('Search results length:', searchResults.length);
+  
+  if (searchResults.length === 0) {
+    console.log('No search results found, trying direct function name matching...');
+    
+    // Try direct function name matching as fallback
+    const allFunctionNames = [];
+    Object.entries(analyticalFunctionRegistry).forEach(([key, func]) => {
+      allFunctionNames.push({ key, name: func.name, func });
+      func.aliases.forEach(alias => {
+        allFunctionNames.push({ key, name: alias, func });
+      });
+    });
+    
+    console.log('All available function names:', allFunctionNames.map(f => f.name));
+    
+    const directMatch = allFunctionNames.find(funcInfo => 
+      command.includes(funcInfo.name.toLowerCase())
+    );
+    
+    console.log('Direct match found:', directMatch);
+    
+    if (!directMatch) {
+      return {
+        action: 'unknown',
+        suggestion: `Could not identify the analytical function. Available functions: ${Object.keys(analyticalFunctionRegistry).join(', ')}`
+      };
+    }
+    
+    // Use direct match as search result
+    searchResults.push({
+      key: directMatch.key,
+      ...directMatch.func,
+      relevance: 10
+    });
+  }
+  
+  const bestMatch = searchResults[0];
+  console.log('Best function match:', {
+    key: bestMatch.key,
+    name: bestMatch.name,
+    inputType: bestMatch.inputType,
+    aliases: bestMatch.aliases
+  });
+  
+  // Extract data types from command
+  const availableDataTypes = getAvailableDataTypes();
+  console.log('Available data types:', availableDataTypes);
+  
+  const foundDataTypes = [];
+  
+  availableDataTypes.forEach(dataType => {
+    // Check for exact match and common variations
+    const variations = [
+      dataType,
+      dataType.replace('_', ' '), // crime_rates -> crime rates
+      dataType.replace('_', ''), // crime_rates -> crimerates
+    ];
+    
+    // Add common aliases
+    if (dataType === 'crime_rates') {
+      variations.push('crime', 'crimes', 'crime rate');
+    }
+    if (dataType === 'land_area') {
+      variations.push('land area', 'area', 'size');
+    }
+    
+    console.log(`Checking data type "${dataType}" with variations:`, variations);
+    
+    const found = variations.some(variation => {
+      const isFound = command.includes(variation.toLowerCase());
+      if (isFound) {
+        console.log(`Found variation "${variation}" in command`);
+      }
+      return isFound;
+    });
+    
+    if (found) {
+      foundDataTypes.push(dataType);
+      console.log(`Added data type: ${dataType}`);
+    }
+  });
+  
+  console.log('Final found data types:', foundDataTypes);
+  
+  // Validate based on function requirements
+  if (bestMatch.inputType === 'single_dataset') {
+    console.log('Processing single dataset function');
+    
+    if (foundDataTypes.length === 0) {
+      return {
+        action: 'unknown',
+        suggestion: `Please specify a data type for ${bestMatch.name}. Available: ${availableDataTypes.join(', ')}`
+      };
+    }
+    
+    if (foundDataTypes.length > 1) {
+      console.warn(`Multiple data types found for single dataset function: ${foundDataTypes.join(', ')}`);
+      // Use the first one found
+      foundDataTypes.splice(1);
+    }
+    
+    const result = {
+      action: 'analytical_function',
+      functionName: bestMatch.name,
+      functionKey: bestMatch.key || bestMatch.name,
+      inputType: 'single_dataset',
+      dataType: foundDataTypes[0],
+      description: bestMatch.description
+    };
+    
+    console.log('Returning single dataset result:', result);
+    return result;
+    
+  } else if (bestMatch.inputType === 'dual_dataset') {
+    console.log('Processing dual dataset function');
+    
+    if (foundDataTypes.length < 2) {
+      return {
+        action: 'unknown',
+        suggestion: `${bestMatch.name} requires two data types. Try "correlation between income and crime rates"`
+      };
+    }
+    
+    if (foundDataTypes.length > 2) {
+      console.warn(`More than 2 data types found for dual dataset function: ${foundDataTypes.join(', ')}`);
+      // Use the first two
+      foundDataTypes.splice(2);
+    }
+    
+    const result = {
+      action: 'analytical_function',
+      functionName: bestMatch.name,
+      functionKey: bestMatch.key || bestMatch.name,
+      inputType: 'dual_dataset',
+      dataTypeX: foundDataTypes[0],
+      dataTypeY: foundDataTypes[1],
+      description: bestMatch.description
+    };
+    
+    console.log('Returning dual dataset result:', result);
+    return result;
+  }
+  
+  console.log('Unsupported input type:', bestMatch.inputType);
+  return {
+    action: 'unknown',
+    suggestion: `Unsupported input type for function: ${bestMatch.name}`
+  };
+};
+
+/**
  * Helper function to extract comparison details
  * @param {string} command - The command to extract comparison info from
  * @returns {Object} Object containing firstMetric, secondMetric, and operator
@@ -784,6 +995,7 @@ export function interpretCommand(commandText) {
   console.log('Input command:', commandText);
   console.log('Normalized command:', command);
   console.log('Is ambiguous:', isAmbiguousQuery(command));
+  console.log('Is analytical:', isAnalyticalCommand(command));
   console.log('Is simple highlight:', isSimpleHighlightCommand(command));
   console.log('Is ranking command:', isRankingCommand(command));
   console.log('Is comparison command:', isComparisonCommand(command));
@@ -795,6 +1007,11 @@ export function interpretCommand(commandText) {
   // Check for ambiguous queries first
   if (isAmbiguousQuery(command)) {
     return handleAmbiguousQuery(command);
+  }
+  
+  // Check for analytical commands EARLY in the chain
+  if (isAnalyticalCommand(command)) {
+    return parseAnalyticalCommand(command);
   }
   
   // Check for simple highlighting commands BEFORE multi-color commands
@@ -1344,66 +1561,44 @@ const parseValueConditionForColor = (conditionText) => {
  * @returns {boolean} True if the command is ambiguous
  */
 const isAmbiguousQuery = (command) => {
-  const ambiguousPatterns = [
-    // Vague qualitative terms without context
-    /\b(good|bad|best|worst)\s+(states|counties)\b/,
-    /\b(show|find|get)\s+(states|counties)\b$/,
-    /\b(data|information|stats)\s+(for|about)\s+(states|counties)\b/,
-    
-    // Missing data type
-    /\b(high|low|highest|lowest)\s+(states|counties)\b$/,
-    /\b(top|bottom)\s+\d*\s*(states|counties)\b$/,
-    /\b(show|find|get)\s+(states|counties)\s+with\s+(high|low|highest|lowest)\b$/,
-    
-    // Incomplete comparisons
-    /\b(better|worse|more|less)\s+(than|states|counties)\b/,
-    /\b(compare|comparison)\b/,
-    
-    // Generic requests
-    /\b(help|what|how)\b/,
-    /\b(show me|tell me|give me)\s+(something|anything)\b/,
-    /\b(tell me|show me)\s+(about|information|data)\s+(states|counties)\b/
-  ];
+  const lowerCommand = command.toLowerCase();
   
-  return ambiguousPatterns.some(pattern => pattern.test(command));
-};
-
-/**
- * Helper function to categorize ambiguous queries
- * @param {string} command - The command to categorize
- * @returns {string} The category of ambiguity
- */
-const categorizeAmbiguousQuery = (command) => {
-  if (/\b(good|bad|best|worst)\s+(states|counties)\b/.test(command)) {
-    return 'vague_qualitative';
-  } else if (/\b(high|low|highest|lowest)\s+(states|counties)\b$/.test(command) || 
-             /\b(show|find|get)\s+(states|counties)\s+with\s+(high|low|highest|lowest)\b$/.test(command)) {
-    return 'missing_data_type';
-  } else if (/\b(top|bottom)\s+\d*\s*(states|counties)\b$/.test(command)) {
-    return 'incomplete_ranking';
-  } else if (/\b(compare|comparison)\b/.test(command)) {
-    return 'comparison_request';
-  } else if (/\b(help|what|how)\b/.test(command)) {
-    return 'help_request';
-  } else if (/\b(tell me|show me)\s+(about|information|data)\s+(states|counties)\b/.test(command)) {
-    return 'general_ambiguous';
+  if (lowerCommand.includes('good') || lowerCommand.includes('best') || lowerCommand.includes('nice')) {
+    return true;
+  } else if (lowerCommand.includes('high') || lowerCommand.includes('low') || lowerCommand.includes('big') || lowerCommand.includes('small')) {
+    return true;
+  } else if (lowerCommand.includes('top') || lowerCommand.includes('bottom') || lowerCommand.includes('most') || lowerCommand.includes('least')) {
+    return true;
+  } else if (lowerCommand.includes('compare') || lowerCommand.includes('vs') || lowerCommand.includes('versus')) {
+    return true;
+  } else if (lowerCommand.includes('help') || lowerCommand.includes('what can') || lowerCommand.includes('how to')) {
+    return true;
   } else {
-    return 'general_ambiguous';
+    return false;
   }
 };
 
 /**
- * Get available data types for help messages
- * @returns {Object} Object describing available data types
+ * Categorize ambiguous queries for better clarification responses
+ * @param {string} command - The ambiguous command
+ * @returns {string} Category of the ambiguous query
  */
-const getAvailableDataTypes = () => {
-  return {
-    population: 'Population data (in millions)',
-    crime_rates: 'Crime rates (as percentages)',
-    income: 'Income data (in thousands of dollars)',
-    unemployment: 'Unemployment rates (as percentages)',
-    land_area: 'Land area (in thousands of square miles)'
-  };
+const categorizeAmbiguousQuery = (command) => {
+  const lowerCommand = command.toLowerCase();
+  
+  if (lowerCommand.includes('good') || lowerCommand.includes('best') || lowerCommand.includes('nice')) {
+    return 'vague_qualitative';
+  } else if (lowerCommand.includes('high') || lowerCommand.includes('low') || lowerCommand.includes('big') || lowerCommand.includes('small')) {
+    return 'missing_data_type';
+  } else if (lowerCommand.includes('top') || lowerCommand.includes('bottom') || lowerCommand.includes('most') || lowerCommand.includes('least')) {
+    return 'incomplete_ranking';
+  } else if (lowerCommand.includes('compare') || lowerCommand.includes('vs') || lowerCommand.includes('versus')) {
+    return 'comparison_request';
+  } else if (lowerCommand.includes('help') || lowerCommand.includes('what can') || lowerCommand.includes('how to')) {
+    return 'help_request';
+  } else {
+    return 'general_ambiguous';
+  }
 };
 
 /**
@@ -1706,4 +1901,31 @@ const getStateIdFromName = (locationName) => {
   // Normalize location name (lowercase, handle spaces)
   const normalizedLocation = locationName.toLowerCase().trim();
   return stateNameToFips[normalizedLocation];
+};
+
+/**
+ * Test function for analytical command parsing
+ * @returns {void}
+ */
+export const testAnalyticalCommandParsing = () => {
+  console.log('=== Testing Analytical Command Parsing ===');
+  
+  const testCommands = [
+    'calculate mean of population',
+    'show correlation between income and crime rates',
+    'what is the average unemployment',
+    'find median income',
+    'get summary statistics for population',
+    'calculate standard deviation of crime rates',
+    'show me the correlation between population and land area',
+    'invalid analytical command'
+  ];
+  
+  testCommands.forEach(command => {
+    console.log(`\nTesting: "${command}"`);
+    const result = interpretCommand(command);
+    console.log('Result:', result);
+  });
+  
+  console.log('\n✅ Analytical command parsing test completed!');
 }; 
