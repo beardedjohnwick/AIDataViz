@@ -1382,6 +1382,167 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     }
   };
 
+  // State name mapping for user-friendly console output
+  const stateNames = {
+    '01': 'Alabama', '02': 'Alaska', '04': 'Arizona', '05': 'Arkansas',
+    '06': 'California', '08': 'Colorado', '09': 'Connecticut', '10': 'Delaware',
+    '12': 'Florida', '13': 'Georgia', '15': 'Hawaii', '16': 'Idaho',
+    '17': 'Illinois', '18': 'Indiana', '19': 'Iowa', '20': 'Kansas',
+    '21': 'Kentucky', '22': 'Louisiana', '23': 'Maine', '24': 'Maryland',
+    '25': 'Massachusetts', '26': 'Michigan', '27': 'Minnesota', '28': 'Mississippi',
+    '29': 'Missouri', '30': 'Montana', '31': 'Nebraska', '32': 'Nevada',
+    '33': 'New Hampshire', '34': 'New Jersey', '35': 'New Mexico', '36': 'New York',
+    '37': 'North Carolina', '38': 'North Dakota', '39': 'Ohio', '40': 'Oklahoma',
+    '41': 'Oregon', '42': 'Pennsylvania', '44': 'Rhode Island', '45': 'South Carolina',
+    '46': 'South Dakota', '47': 'Tennessee', '48': 'Texas', '49': 'Utah',
+    '50': 'Vermont', '51': 'Virginia', '53': 'Washington', '54': 'West Virginia',
+    '55': 'Wisconsin', '56': 'Wyoming'
+  };
+
+  // Function to generate color gradients
+  const generateColorGradient = (baseColor, intensity) => {
+    // intensity should be between 0 and 1, where 1 is darkest
+    const colorMap = {
+      red: { r: 255, g: 0, b: 0 },
+      blue: { r: 0, g: 0, b: 255 },
+      green: { r: 0, g: 128, b: 0 },
+      yellow: { r: 255, g: 255, b: 0 },
+      orange: { r: 255, g: 165, b: 0 },
+      purple: { r: 128, g: 0, b: 128 },
+      pink: { r: 255, g: 192, b: 203 }
+    };
+    
+    const baseRGB = colorMap[baseColor] || colorMap.blue;
+    
+    // Create gradient from light to dark
+    // Light version: blend with white (255, 255, 255)
+    // Dark version: use the base color
+    const lightFactor = 1 - intensity; // Higher intensity = less light blending
+    
+    const r = Math.round(baseRGB.r + (255 - baseRGB.r) * lightFactor);
+    const g = Math.round(baseRGB.g + (255 - baseRGB.g) * lightFactor);
+    const b = Math.round(baseRGB.b + (255 - baseRGB.b) * lightFactor);
+    
+    return `rgb(${r}, ${g}, ${b})`;
+  };
+
+  // Function to convert RGB to hex for Leaflet
+  const rgbToHex = (rgb) => {
+    const match = rgb.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (!match) return rgb;
+    
+    const r = parseInt(match[1]);
+    const g = parseInt(match[2]);
+    const b = parseInt(match[3]);
+    
+    return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+  };
+
+  // Function to apply ranking queries
+  const applyRanking = (targetType, dataType, count, direction, color = 'blue') => {
+    console.log('Applying ranking:', { targetType, dataType, count, direction, color });
+    
+    const data = mockDataSets[dataType];
+    
+    if (!data) {
+      console.error('Data not found for ranking:', dataType);
+      return;
+    }
+    
+    // Convert data to array of [fipsCode, value] pairs
+    const dataArray = Object.entries(data).map(([fipsCode, value]) => ({
+      fipsCode,
+      value,
+      originalValue: value
+    }));
+    
+    // Filter by target type (state vs county)
+    const filteredData = dataArray.filter(item => {
+      const isStateCode = item.fipsCode.length <= 2;
+      const isCountyCode = item.fipsCode.length > 2;
+      
+      if (targetType === 'state') {
+        return isStateCode;
+      } else if (targetType === 'county') {
+        return isCountyCode;
+      }
+      return true; // Default to include all
+    });
+    
+    // Apply data type-specific adjustments for display purposes
+    filteredData.forEach(item => {
+      if (dataType === 'population') {
+        item.displayValue = `${item.value}M`; // Show as millions
+      } else if (dataType === 'income') {
+        item.displayValue = `$${item.value}k`; // Show as thousands
+      } else if (dataType === 'crime_rates') {
+        item.displayValue = `${(item.value * 100).toFixed(1)}%`; // Show as percentage
+      } else if (dataType === 'unemployment') {
+        item.displayValue = `${(item.value * 100).toFixed(1)}%`; // Show as percentage
+      } else if (dataType === 'land_area') {
+        item.displayValue = `${item.value}k sq mi`; // Show as thousands of square miles
+      } else {
+        item.displayValue = item.value.toString();
+      }
+    });
+    
+    // Sort based on direction
+    if (direction === 'desc') {
+      filteredData.sort((a, b) => b.value - a.value);
+    } else {
+      filteredData.sort((a, b) => a.value - b.value);
+    }
+    
+    // Take top N results
+    const topResults = filteredData.slice(0, count);
+    
+    // Create highlighting data with color gradient
+    const highlightData = {};
+    const minVisibleIntensity = 0.3; // Set to 0.6 for a much less pronounced gradient range
+    
+    topResults.forEach((item, index) => {
+      // Calculate intensity: rank 1 gets highest intensity (darkest), last rank gets lowest intensity (lightest)
+      const rawIntensity = 1 - (index / Math.max(1, count - 1)); // Ensure we don't divide by 0
+      // Apply minimum visible intensity to make gradient range less pronounced
+      const intensity = minVisibleIntensity + (rawIntensity * (1 - minVisibleIntensity));
+      const gradientColor = generateColorGradient(color, intensity);
+      const hexColor = rgbToHex(gradientColor);
+      
+      highlightData[item.fipsCode] = {
+        color: hexColor,
+        intensity: intensity,
+        rank: index + 1
+      };
+    });
+    
+    // Apply highlighting
+    if (targetType === 'state') {
+      setHighlightedStates(highlightData);
+    } else {
+      setHighlightedCounties(highlightData);
+    }
+    
+    // Log results for user feedback
+    console.log(`Ranking results (${direction === 'desc' ? 'highest' : 'lowest'} ${dataType}) in ${color} gradient:`);
+    topResults.forEach((item, index) => {
+      const stateName = stateNames[item.fipsCode] || `State ${item.fipsCode}`;
+      const intensity = highlightData[item.fipsCode].intensity;
+      console.log(`${index + 1}. ${stateName}: ${item.displayValue} (intensity: ${intensity.toFixed(2)})`);
+    });
+    
+    console.log('Ranking application results:', {
+      dataType,
+      direction,
+      color,
+      requestedCount: count,
+      actualCount: topResults.length,
+      highlightedStates: Object.keys(highlightData),
+      topValue: topResults[0]?.displayValue,
+      bottomValue: topResults[topResults.length - 1]?.displayValue,
+      colorRange: `Light ${color} to Dark ${color}`
+    });
+  };
+
   // Function to handle map commands from the control panel
   const handleMapCommand = (commandString) => {
     if (!commandString) return;
@@ -1426,6 +1587,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         // Handle the new multi-color highlight action
         applyMultiColorHighlight(result.targetType, result.coloredConditions);
         break;
+      case 'ranking':
+        // Handle the new ranking action
+        applyRanking(result.targetType, result.dataType, result.count, result.direction, result.color);
+        break;
       case 'unknown':
       default:
         console.warn("Unknown command:", commandString);
@@ -1445,22 +1610,31 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     
     // Check if this state is highlighted
     if (fipsCode && highlightedStates[fipsCode]) {
-      const color = highlightedStates[fipsCode];
+      const highlight = highlightedStates[fipsCode];
       
-      // Map numeric color values back to actual colors
-      const colorMap = {
-        0.9: 'red',
-        0.7: 'blue',
-        0.5: 'green',
-        0.3: 'yellow',
-        0.8: 'orange',
-        0.6: 'purple', // Overlap color
-        0.4: 'pink'
-      };
+      // Check if it's the new color object format (from ranking)
+      if (highlight.color && typeof highlight.color === 'string') {
+        return {
+          color: 'black',
+          weight: 1,
+          fillColor: highlight.color,
+          fillOpacity: 0.8
+        };
+      }
       
-      // If the color is a numeric value, map it to the actual color
-      if (typeof color === 'number') {
-        const actualColor = colorMap[color];
+      // Handle legacy numeric color values
+      if (typeof highlight === 'number') {
+        const colorMap = {
+          0.9: 'red',
+          0.7: 'blue',
+          0.5: 'green',
+          0.3: 'yellow',
+          0.8: 'orange',
+          0.6: 'purple', // Overlap color
+          0.4: 'pink'
+        };
+        
+        const actualColor = colorMap[highlight];
         if (actualColor) {
           return {
             color: 'black',
@@ -1472,11 +1646,11 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       }
       
       // If the color is a string like 'red', 'blue', etc. use it directly
-      if (typeof color === 'string' && !color.startsWith('#')) {
+      if (typeof highlight === 'string' && !highlight.startsWith('#')) {
         return {
           color: 'black',
           weight: 1,
-          fillColor: color,
+          fillColor: highlight,
           fillOpacity: 0.7
         };
       }
@@ -1485,7 +1659,7 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       return {
         color: 'black',
         weight: 1,
-        fillColor: color,
+        fillColor: highlight,
         fillOpacity: 0.7
       };
     }
@@ -1512,22 +1686,31 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     
     // Check if this county is highlighted
     if (fipsCode && highlightedCounties[fipsCode]) {
-      const color = highlightedCounties[fipsCode];
+      const highlight = highlightedCounties[fipsCode];
       
-      // Map numeric color values back to actual colors
-      const colorMap = {
-        0.9: 'red',
-        0.7: 'blue',
-        0.5: 'green',
-        0.3: 'yellow',
-        0.8: 'orange',
-        0.6: 'purple', // Overlap color
-        0.4: 'pink'
-      };
+      // Check if it's the new color object format (from ranking)
+      if (highlight.color && typeof highlight.color === 'string') {
+        return {
+          color: '#444',
+          weight: 0.5,
+          fillColor: highlight.color,
+          fillOpacity: 0.8
+        };
+      }
       
-      // If the color is a numeric value, map it to the actual color
-      if (typeof color === 'number') {
-        const actualColor = colorMap[color];
+      // Handle legacy numeric color values
+      if (typeof highlight === 'number') {
+        const colorMap = {
+          0.9: 'red',
+          0.7: 'blue',
+          0.5: 'green',
+          0.3: 'yellow',
+          0.8: 'orange',
+          0.6: 'purple', // Overlap color
+          0.4: 'pink'
+        };
+        
+        const actualColor = colorMap[highlight];
         if (actualColor) {
           return {
             color: '#444',
@@ -1539,11 +1722,11 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       }
       
       // If the color is a string like 'red', 'blue', etc. use it directly
-      if (typeof color === 'string' && !color.startsWith('#')) {
+      if (typeof highlight === 'string' && !highlight.startsWith('#')) {
         return {
           color: '#444',
           weight: 0.5,
-          fillColor: color,
+          fillColor: highlight,
           fillOpacity: 0.7
         };
       }
@@ -1552,7 +1735,7 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       return {
         color: '#444',
         weight: 0.5,
-        fillColor: color,
+        fillColor: highlight,
         fillOpacity: 0.7
       };
     }

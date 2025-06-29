@@ -218,6 +218,130 @@ const hasNotLogic = (command) => {
 };
 
 /**
+ * Checks if a command contains ranking keywords
+ * @param {string} command - The command to check
+ * @returns {boolean} True if the command contains ranking keywords
+ */
+const isRankingCommand = (command) => {
+  const rankingKeywords = [
+    'top', 'bottom', 'highest', 'lowest', 'best', 'worst',
+    'first', 'last', 'most', 'least', 'maximum', 'minimum'
+  ];
+  return rankingKeywords.some(keyword => command.includes(keyword));
+};
+
+/**
+ * Extracts ranking information from a command
+ * @param {string} command - The command to parse
+ * @returns {Object} Object containing count, direction, dataType, and color
+ */
+const extractRankingInfo = (command) => {
+  let count = null;
+  let direction = null;
+  let dataType = null;
+  let color = null;
+  
+  // Extract count (number of results to show)
+  const countMatch = command.match(/(?:top|bottom|first|last)\s+(\d+)/);
+  if (countMatch) {
+    count = parseInt(countMatch[1]);
+  } else {
+    // Look for patterns like "the 3 states" or "3 states" or "3 counties"
+    const generalCountMatch = command.match(/(?:the\s+)?(\d+)\s+(?:states?|counties?)/);
+    if (generalCountMatch) {
+      count = parseInt(generalCountMatch[1]);
+    } else if (command.includes('highest') || command.includes('lowest') || 
+               command.includes('best') || command.includes('worst') ||
+               command.includes('most') || command.includes('least')) {
+      count = 5; // Default count for superlatives
+    }
+  }
+  
+  // Determine direction (ascending or descending)
+  if (command.includes('top') || command.includes('highest') || 
+      command.includes('best') || command.includes('most') || 
+      command.includes('maximum')) {
+    direction = 'desc'; // Show highest values first
+  } else if (command.includes('bottom') || command.includes('lowest') || 
+             command.includes('worst') || command.includes('least') || 
+             command.includes('minimum')) {
+    direction = 'asc'; // Show lowest values first
+  }
+  
+  // Extract data type
+  if (command.includes('population')) {
+    dataType = 'population';
+  } else if (command.includes('crime')) {
+    dataType = 'crime_rates';
+  } else if (command.includes('income')) {
+    dataType = 'income';
+  } else if (command.includes('unemployment')) {
+    dataType = 'unemployment';
+  } else if (command.includes('land area') || command.includes('area')) {
+    dataType = 'land_area';
+  }
+  
+  // Extract color from the command
+  const colorKeywords = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink'];
+  for (const colorKeyword of colorKeywords) {
+    if (command.includes(` in ${colorKeyword}`) || command.includes(` ${colorKeyword}`)) {
+      color = colorKeyword;
+      break;
+    }
+  }
+  
+  // Default color if none specified
+  if (!color) {
+    color = 'blue'; // Default ranking color
+  }
+  
+  return { count, direction, dataType, color };
+};
+
+/**
+ * Parses a ranking command
+ * @param {string} command - The command to parse
+ * @returns {Object} A structured action object
+ */
+const parseRankingCommand = (command) => {
+  console.log('Parsing ranking command:', command);
+  
+  let targetType = 'state'; // default
+  if (command.includes('counties')) {
+    targetType = 'county';
+  } else if (command.includes('states')) {
+    targetType = 'state';
+  }
+  
+  const rankingInfo = extractRankingInfo(command);
+  
+  if (!rankingInfo.dataType) {
+    return { 
+      action: 'unknown', 
+      suggestion: 'Could not identify data type for ranking query' 
+    };
+  }
+  
+  if (!rankingInfo.direction) {
+    return { 
+      action: 'unknown', 
+      suggestion: 'Could not determine ranking direction (highest/lowest)' 
+    };
+  }
+  
+  console.log('Parsed ranking info:', rankingInfo);
+  
+  return {
+    action: 'ranking',
+    targetType: targetType,
+    dataType: rankingInfo.dataType,
+    count: rankingInfo.count || 5,
+    direction: rankingInfo.direction,
+    color: rankingInfo.color
+  };
+};
+
+/**
  * Parses a multi-conditional command
  * @param {string} command - The command to parse
  * @returns {Object} A structured action object
@@ -515,6 +639,7 @@ export function interpretCommand(commandText) {
   console.log('=== Mock LLM Debug ===');
   console.log('Input command:', commandText);
   console.log('Normalized command:', command);
+  console.log('Is ranking command:', isRankingCommand(command));
   console.log('Contains "and":', command.includes(' and '));
   console.log('Contains "or":', command.includes(' or '));
   console.log('Has NOT logic:', hasNotLogic(command));
@@ -523,6 +648,11 @@ export function interpretCommand(commandText) {
   // Check for multi-color highlighting commands first
   if (isMultiColorCommand(command)) {
     return parseMultiColorCommand(command);
+  }
+  
+  // Check for ranking commands
+  if (isRankingCommand(command)) {
+    return parseRankingCommand(command);
   }
   
   // Check for multi-conditional commands (including NOT logic)
