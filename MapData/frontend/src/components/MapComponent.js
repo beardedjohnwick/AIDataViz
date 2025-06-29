@@ -1591,6 +1591,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         // Handle the new ranking action
         applyRanking(result.targetType, result.dataType, result.count, result.direction, result.color);
         break;
+      case 'comparison':
+        // Handle the new comparison action
+        applyComparison(result.targetType, result.firstMetric, result.secondMetric, result.operator);
+        break;
       case 'clarify':
         // Handle clarification requests
         handleClarification(result);
@@ -1936,6 +1940,127 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     applyHeatmap,
     clearHeatmap
   }));
+
+  /**
+   * Normalize different data types for comparison to ensure fair comparison
+   * @param {string} dataType - The data type being normalized
+   * @param {number} value - The value to normalize
+   * @returns {number} The normalized value (0-100 scale)
+   */
+  const normalizeDataForComparison = (dataType, value) => {
+    // Normalize different data types to comparable scales
+    switch (dataType) {
+      case 'population':
+        // Population is in millions, normalize to 0-100 scale
+        return Math.min(100, (value / 40) * 100); // 40M = 100 points
+        
+      case 'crime_rates':
+        // Crime rates are percentages (0-1), convert to 0-100 scale
+        return value * 100;
+        
+      case 'income':
+        // Income is in thousands, normalize to 0-100 scale
+        return Math.min(100, (value / 100) * 100); // $100k = 100 points
+        
+      case 'unemployment':
+        // Unemployment is percentage (0-1), convert to 0-100 scale
+        return value * 100;
+        
+      case 'land_area':
+        // Land area is in thousands of sq miles, normalize to 0-100 scale
+        return Math.min(100, (value / 700) * 100); // 700k sq mi = 100 points
+        
+      default:
+        return value;
+    }
+  };
+
+  /**
+   * Apply comparison filtering between two different data types
+   * @param {string} targetType - The target type ('state' or 'county')
+   * @param {string} firstMetric - The first metric to compare
+   * @param {string} secondMetric - The second metric to compare
+   * @param {string} operator - The comparison operator ('gt', 'lt', 'eq')
+   */
+  const applyComparison = (targetType, firstMetric, secondMetric, operator) => {
+    console.log('Applying comparison:', { targetType, firstMetric, secondMetric, operator });
+    
+    const firstData = mockDataSets[firstMetric];
+    const secondData = mockDataSets[secondMetric];
+    
+    if (!firstData || !secondData) {
+      console.error('Missing data for comparison:', { firstMetric, secondMetric });
+      return;
+    }
+    
+    const comparisonResults = {};
+    const detailedResults = {};
+    
+    // Get all FIPS codes that exist in both datasets
+    const commonFips = Object.keys(firstData).filter(fips => secondData[fips] !== undefined);
+    
+    commonFips.forEach(fipsCode => {
+      const firstValue = firstData[fipsCode];
+      const secondValue = secondData[fipsCode];
+      
+      // Normalize values for fair comparison
+      const normalizedFirst = normalizeDataForComparison(firstMetric, firstValue);
+      const normalizedSecond = normalizeDataForComparison(secondMetric, secondValue);
+      
+      let meetsComparison = false;
+      
+      switch (operator) {
+        case 'gt':
+          meetsComparison = normalizedFirst > normalizedSecond;
+          break;
+        case 'lt':
+          meetsComparison = normalizedFirst < normalizedSecond;
+          break;
+        case 'eq':
+          meetsComparison = Math.abs(normalizedFirst - normalizedSecond) < 1; // Allow small tolerance
+          break;
+      }
+      
+      if (meetsComparison) {
+        comparisonResults[fipsCode] = 0.8; // Highlight value
+      }
+      
+      // Store detailed results for logging
+      detailedResults[fipsCode] = {
+        firstValue: firstValue,
+        secondValue: secondValue,
+        normalizedFirst: normalizedFirst.toFixed(1),
+        normalizedSecond: normalizedSecond.toFixed(1),
+        meetsComparison: meetsComparison
+      };
+    });
+    
+    // Apply highlighting
+    if (targetType === 'state') {
+      setHighlightedStates(comparisonResults);
+    } else {
+      setHighlightedCounties(comparisonResults);
+    }
+    
+    // Log results for user feedback
+    const operatorText = operator === 'gt' ? 'higher than' : operator === 'lt' ? 'lower than' : 'equal to';
+    console.log(`Comparison results (${firstMetric} ${operatorText} ${secondMetric}):`);
+    
+    Object.entries(detailedResults).forEach(([fipsCode, details]) => {
+      const stateName = stateNames[fipsCode] || `State ${fipsCode}`;
+      const status = details.meetsComparison ? '✓' : '✗';
+      console.log(`${status} ${stateName}: ${firstMetric}=${details.normalizedFirst} vs ${secondMetric}=${details.normalizedSecond}`);
+    });
+    
+    console.log('Comparison application results:', {
+      firstMetric,
+      secondMetric,
+      operator: operatorText,
+      totalStates: commonFips.length,
+      matchingStates: Object.keys(comparisonResults).length,
+      matchingStatesList: Object.keys(comparisonResults)
+    });
+  };
 
   return (
     <>

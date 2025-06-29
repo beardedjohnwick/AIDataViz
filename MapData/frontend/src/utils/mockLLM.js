@@ -48,30 +48,37 @@ export function parseNumberExpression(text) {
  * @returns {string|null} The standardized data type or null if not recognized
  */
 export function normalizeDataType(text) {
+  console.log('Normalizing data type:', text);
+  
   if (!text) return null;
   
   const lowerText = text.toLowerCase().trim();
   
   // Population variations
   if (/population|pop|people/.test(lowerText)) {
+    console.log('Normalized result: population');
     return 'population';
   }
   
   // Crime rate variations
   if (/crime rate|crime rates|crime/.test(lowerText)) {
+    console.log('Normalized result: crime_rates');
     return 'crime_rates';
   }
   
   // Income variations
   if (/income|median income|average income/.test(lowerText)) {
+    console.log('Normalized result: income');
     return 'income';
   }
   
   // Unemployment variations
   if (/unemployment|unemployment rate/.test(lowerText)) {
+    console.log('Normalized result: unemployment');
     return 'unemployment';
   }
   
+  console.log('Normalized result: null (not recognized)');
   return null;
 }
 
@@ -228,6 +235,23 @@ const isRankingCommand = (command) => {
     'first', 'last', 'most', 'least', 'maximum', 'minimum'
   ];
   return rankingKeywords.some(keyword => command.includes(keyword));
+};
+
+/**
+ * Checks if a command is a comparison command
+ * @param {string} command - The command to check for comparison patterns
+ * @returns {boolean} True if the command is a comparison command
+ */
+const isComparisonCommand = (command) => {
+  const comparisonPatterns = [
+    /\b(higher|greater|more|larger)\s+than\b/,
+    /\b(lower|less|smaller)\s+than\b/,
+    /\bcompare\s+\w+\s+(to|with|vs|versus)\s+\w+/,
+    /\b\w+\s+(vs|versus)\s+\w+/,
+    /\bwhere\s+\w+\s+(is|are)\s+(higher|lower|greater|less)\s+than\s+\w+/
+  ];
+  
+  return comparisonPatterns.some(pattern => pattern.test(command));
 };
 
 /**
@@ -628,6 +652,126 @@ const parseTrendCommand = (command) => {
 };
 
 /**
+ * Parses a comparison command
+ * @param {string} command - The comparison command to parse
+ * @returns {Object} Parsed comparison command object
+ */
+const parseComparisonCommand = (command) => {
+  console.log('Parsing comparison command:', command);
+  
+  let targetType = 'state'; // default
+  if (command.includes('counties')) {
+    targetType = 'county';
+  } else if (command.includes('states')) {
+    targetType = 'state';
+  }
+  
+  const comparisonInfo = extractComparisonInfo(command);
+  
+  if (!comparisonInfo.firstMetric || !comparisonInfo.secondMetric) {
+    return { 
+      action: 'unknown', 
+      suggestion: 'Could not identify both metrics for comparison. Try: "show states where income is higher than crime rates"' 
+    };
+  }
+  
+  if (!comparisonInfo.operator) {
+    return { 
+      action: 'unknown', 
+      suggestion: 'Could not determine comparison type. Use "higher than", "lower than", etc.' 
+    };
+  }
+  
+  console.log('Parsed comparison info:', comparisonInfo);
+  
+  return {
+    action: 'comparison',
+    targetType: targetType,
+    firstMetric: comparisonInfo.firstMetric,
+    secondMetric: comparisonInfo.secondMetric,
+    operator: comparisonInfo.operator
+  };
+};
+
+/**
+ * Helper function to extract comparison details
+ * @param {string} command - The command to extract comparison info from
+ * @returns {Object} Object containing firstMetric, secondMetric, and operator
+ */
+const extractComparisonInfo = (command) => {
+  console.log('=== Extracting Comparison Info ===');
+  console.log('Input command:', command);
+  
+  let firstMetric = null;
+  let secondMetric = null;
+  let operator = null;
+  
+  // Extract comparison operator
+  if (command.includes('higher than') || command.includes('greater than') || command.includes('more than') || command.includes('larger than')) {
+    operator = 'gt';
+  } else if (command.includes('lower than') || command.includes('less than') || command.includes('smaller than')) {
+    operator = 'lt';
+  }
+  
+  console.log('Detected operator:', operator);
+  
+  // Improved data type detection with specific patterns
+  const dataTypePatterns = [
+    { pattern: /\bpopulation\b/, type: 'population' },
+    { pattern: /\bcrime rates?\b/, type: 'crime_rates' },
+    { pattern: /\bcrime\b/, type: 'crime_rates' },
+    { pattern: /\bincome\b/, type: 'income' },
+    { pattern: /\bunemployment\b/, type: 'unemployment' },
+    { pattern: /\bland area\b/, type: 'land_area' },
+    { pattern: /\barea\b/, type: 'land_area' }
+  ];
+  
+  const foundDataTypes = [];
+  
+  for (const { pattern, type } of dataTypePatterns) {
+    if (pattern.test(command)) {
+      console.log(`Pattern "${pattern}" matched -> type "${type}"`);
+      
+      // Avoid duplicates
+      if (!foundDataTypes.includes(type)) {
+        foundDataTypes.push(type);
+      }
+    }
+  }
+  
+  console.log('All found data types:', foundDataTypes);
+  
+  // Assign first and second metrics
+  if (foundDataTypes.length >= 2) {
+    firstMetric = foundDataTypes[0];
+    secondMetric = foundDataTypes[1];
+  } else if (foundDataTypes.length === 1) {
+    console.warn('Only found one data type:', foundDataTypes[0]);
+  } else {
+    console.warn('No data types found in command');
+  }
+  
+  console.log('Final extraction result:', { firstMetric, secondMetric, operator });
+  console.log('=== End Comparison Info Extraction ===');
+  
+  return { firstMetric, secondMetric, operator };
+};
+
+/**
+ * Helper function to normalize data type names for comparison
+ * @param {string} dataType - The data type to normalize
+ * @returns {string} The normalized data type
+ */
+const normalizeDataTypeForComparison = (dataType) => {
+  if (dataType.includes('crime')) return 'crime_rates';
+  if (dataType.includes('population')) return 'population';
+  if (dataType.includes('income')) return 'income';
+  if (dataType.includes('unemployment')) return 'unemployment';
+  if (dataType.includes('land area') || dataType.includes('area')) return 'land_area';
+  return dataType;
+};
+
+/**
  * Interprets a command string and returns a structured action object
  * @param {string} commandText - The command text to interpret
  * @returns {Object} An action object with the appropriate properties
@@ -641,6 +785,7 @@ export function interpretCommand(commandText) {
   console.log('Normalized command:', command);
   console.log('Is ambiguous:', isAmbiguousQuery(command));
   console.log('Is ranking command:', isRankingCommand(command));
+  console.log('Is comparison command:', isComparisonCommand(command));
   console.log('Contains "and":', command.includes(' and '));
   console.log('Contains "or":', command.includes(' or '));
   console.log('Has NOT logic:', hasNotLogic(command));
@@ -659,6 +804,11 @@ export function interpretCommand(commandText) {
   // Check for ranking commands
   if (isRankingCommand(command)) {
     return parseRankingCommand(command);
+  }
+  
+  // Check for comparison commands
+  if (isComparisonCommand(command)) {
+    return parseComparisonCommand(command);
   }
   
   // Check for multi-conditional commands (including NOT logic)
