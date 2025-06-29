@@ -382,6 +382,190 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     }
   };
 
+  // Mock historical data for time-series analysis
+  const mockHistoricalData = {
+    income: {
+      // State FIPS -> array of values for [2019, 2020, 2021, 2022, 2023]
+      '06': [72.5, 73.1, 74.8, 75.2, 76.1], // California - increasing trend
+      '48': [59.8, 60.2, 61.1, 61.9, 62.3], // Texas - increasing trend
+      '36': [65.2, 64.8, 66.1, 68.5, 67.9], // New York - mixed trend
+      '12': [54.1, 53.8, 54.9, 55.7, 55.2], // Florida - mixed trend
+      '17': [63.2, 62.8, 64.1, 65.8, 65.1], // Illinois - mixed trend
+      '04': [56.8, 57.2, 58.1, 58.9, 59.4], // Arizona - increasing trend
+      '13': [56.1, 55.9, 57.2, 58.7, 58.9], // Georgia - increasing trend
+      '26': [57.8, 57.2, 58.4, 59.2, 58.8], // Michigan - mixed trend
+      '39': [56.9, 56.5, 57.3, 58.1, 57.8], // Ohio - mixed trend
+      '51': [71.8, 72.1, 73.4, 74.2, 74.8]  // Virginia - increasing trend
+    },
+    crime_rates: {
+      // State FIPS -> array of values for [2019, 2020, 2021, 2022, 2023]
+      '06': [0.14, 0.13, 0.12, 0.12, 0.11], // California - decreasing trend
+      '48': [0.09, 0.08, 0.08, 0.08, 0.07], // Texas - decreasing trend
+      '36': [0.16, 0.15, 0.15, 0.15, 0.14], // New York - decreasing trend
+      '12': [0.12, 0.11, 0.11, 0.11, 0.10], // Florida - decreasing trend
+      '17': [0.10, 0.09, 0.09, 0.09, 0.08], // Illinois - decreasing trend
+      '04': [0.08, 0.07, 0.07, 0.07, 0.07], // Arizona - decreasing trend
+      '13': [0.15, 0.14, 0.14, 0.14, 0.13], // Georgia - decreasing trend
+      '26': [0.11, 0.10, 0.10, 0.10, 0.09], // Michigan - decreasing trend
+      '39': [0.09, 0.08, 0.08, 0.08, 0.07], // Ohio - decreasing trend
+      '51': [0.07, 0.06, 0.06, 0.06, 0.05]  // Virginia - decreasing trend
+    }
+  };
+
+  // Function to analyze time trends in data
+  const analyzeTimeTrend = (dataArray, trend, timePeriod) => {
+    if (!dataArray || dataArray.length < 2) return false;
+    
+    if (timePeriod.type === 'recent') {
+      // Check trend over recent years
+      const recentData = dataArray.slice(-timePeriod.years);
+      return checkTrendDirection(recentData, trend);
+    } else if (timePeriod.type === 'majority') {
+      // Check if trend occurred in at least X of the last Y years
+      const recentData = dataArray.slice(-timePeriod.years);
+      let trendCount = 0;
+      
+      for (let i = 1; i < recentData.length; i++) {
+        const yearOverYear = recentData[i] > recentData[i-1];
+        if ((trend === 'increase' && yearOverYear) || 
+            (trend === 'decrease' && !yearOverYear)) {
+          trendCount++;
+        }
+      }
+      
+      return trendCount >= timePeriod.threshold;
+    }
+    
+    return false;
+  };
+
+  // Function to check direction of trend
+  const checkTrendDirection = (dataArray, expectedTrend) => {
+    if (dataArray.length < 2) return false;
+    
+    const firstValue = dataArray[0];
+    const lastValue = dataArray[dataArray.length - 1];
+    
+    switch (expectedTrend) {
+      case 'increase':
+        return lastValue > firstValue;
+      case 'decrease':
+        return lastValue < firstValue;
+      case 'stable':
+        return Math.abs(lastValue - firstValue) < 0.01; // Small threshold for stability
+      default:
+        return false;
+    }
+  };
+
+  // Function to apply multi-condition filters
+  const applyMultiFilter = (targetType, conditions, operator = 'and') => {
+    console.log(`Applying multi-filter: ${targetType} with ${conditions.length} conditions, operator: ${operator}`);
+    console.log('Conditions:', conditions);
+    
+    const filteredData = {};
+    
+    // Get all possible FIPS codes from the first condition's data
+    const firstCondition = conditions[0];
+    const firstDataSet = firstCondition.type === 'trend' 
+      ? mockHistoricalData[firstCondition.dataType] 
+      : mockDataSets[firstCondition.dataType];
+    
+    if (!firstDataSet) {
+      console.error(`No data available for data type: ${firstCondition.dataType}`);
+      return;
+    }
+    
+    Object.keys(firstDataSet).forEach(fipsCode => {
+      // Skip if the FIPS code doesn't match the target type
+      const isStateCode = fipsCode.length <= 2;
+      const isCountyCode = fipsCode.length > 2;
+      
+      if ((targetType === 'state' && !isStateCode) || 
+          (targetType === 'county' && !isCountyCode)) {
+        return;
+      }
+      
+      let meetsAllConditions = true;
+      
+      for (const condition of conditions) {
+        let meetsThisCondition = false;
+        
+        if (condition.type === 'trend') {
+          const historicalData = mockHistoricalData[condition.dataType];
+          if (historicalData && historicalData[fipsCode]) {
+            meetsThisCondition = analyzeTimeTrend(
+              historicalData[fipsCode], 
+              condition.trend, 
+              condition.timePeriod
+            );
+          }
+        } else if (condition.type === 'value') {
+          // Handle regular value-based conditions
+          const data = mockDataSets[condition.dataType];
+          if (data && data[fipsCode] !== undefined) {
+            const value = data[fipsCode];
+            let adjustedConditionValue = condition.condition.value;
+            
+            if (condition.dataType === 'population') {
+              adjustedConditionValue = condition.condition.value / 1000000;
+            }
+            
+            switch (condition.condition.operator) {
+              case 'gt':
+                meetsThisCondition = value > adjustedConditionValue;
+                break;
+              case 'lt':
+                meetsThisCondition = value < adjustedConditionValue;
+                break;
+              case 'eq':
+                meetsThisCondition = value === adjustedConditionValue;
+                break;
+              case 'gte':
+                meetsThisCondition = value >= adjustedConditionValue;
+                break;
+              case 'lte':
+                meetsThisCondition = value <= adjustedConditionValue;
+                break;
+            }
+          }
+        }
+        
+        if (operator === 'and' && !meetsThisCondition) {
+          meetsAllConditions = false;
+          break;
+        } else if (operator === 'or' && meetsThisCondition) {
+          meetsAllConditions = true;
+          break;
+        }
+      }
+      
+      if (meetsAllConditions) {
+        filteredData[fipsCode] = '#3388ff'; // Highlight color (blue)
+      }
+    });
+    
+    // Apply highlighting to filtered results
+    if (targetType === 'state') {
+      setHighlightedStates(filteredData);
+      if (Object.keys(filteredData).length === 0) {
+        console.warn("No states match the specified conditions");
+      }
+    } else {
+      setHighlightedCounties(filteredData);
+      if (Object.keys(filteredData).length === 0) {
+        console.warn("No counties match the specified conditions");
+      }
+    }
+    
+    console.log('Multi-filter results:', {
+      conditions,
+      operator,
+      matchCount: Object.keys(filteredData).length,
+      matches: Object.keys(filteredData)
+    });
+  };
+
   // Handle feature selection
   const handleFeatureSelected = (selected) => {
     setIsZoomed(selected);
@@ -1132,6 +1316,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       case 'filter':
         // Handle the new filter action
         applyFilter(result.targetType, result.dataType, result.condition);
+        break;
+      case 'multi_filter':
+        // Handle the new multi-condition filter action
+        applyMultiFilter(result.targetType, result.conditions, result.operator);
         break;
       case 'unknown':
       default:

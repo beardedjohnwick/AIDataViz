@@ -131,13 +131,238 @@ export function normalizeOperator(text) {
 }
 
 /**
+ * Recognizes trend keywords in text
+ * @param {string} text - The text containing a trend reference
+ * @returns {string|null} The standardized trend type or null if not recognized
+ */
+export function recognizeTrend(text) {
+  if (!text) return null;
+  
+  const lowerText = text.toLowerCase().trim();
+  
+  // Increase variations
+  if (/rose|increased|went up|improved|growing|rising|higher/.test(lowerText)) {
+    return 'increase';
+  }
+  
+  // Decrease variations
+  if (/dropped|decreased|fell|declined|falling|lower|reducing|reduced/.test(lowerText)) {
+    return 'decrease';
+  }
+  
+  // Stable variations
+  if (/stayed stable|remained constant|stable|constant|unchanged/.test(lowerText)) {
+    return 'stable';
+  }
+  
+  return null;
+}
+
+/**
+ * Parses time period expressions from text
+ * @param {string} text - The text containing a time period reference
+ * @returns {Object|null} An object describing the time period or null if parsing failed
+ */
+export function parseTimePeriod(text) {
+  if (!text) return null;
+  
+  const lowerText = text.toLowerCase().trim();
+  
+  // Match patterns like "last 2 years", "past 3 years"
+  const recentYearsPattern = /(last|past|previous)\s+(\d+)\s+years?/;
+  const recentYearsMatch = lowerText.match(recentYearsPattern);
+  
+  if (recentYearsMatch) {
+    return {
+      years: parseInt(recentYearsMatch[2], 10),
+      type: 'recent'
+    };
+  }
+  
+  // Match patterns like "3 of the last 5 years", "2 out of the past 4 years"
+  const majorityYearsPattern = /(\d+)\s+(?:of|out of)(?:\s+the)?\s+(last|past|previous)\s+(\d+)\s+years?/;
+  const majorityYearsMatch = lowerText.match(majorityYearsPattern);
+  
+  if (majorityYearsMatch) {
+    return {
+      threshold: parseInt(majorityYearsMatch[1], 10),
+      years: parseInt(majorityYearsMatch[3], 10),
+      type: 'majority'
+    };
+  }
+  
+  return null;
+}
+
+/**
+ * Checks if a command contains trend keywords
+ * @param {string} command - The command to check
+ * @returns {boolean} True if the command contains trend keywords
+ */
+const hasTrendKeywords = (command) => {
+  const trendKeywords = [
+    'went up', 'rose', 'increased', 'improved', 'grew',
+    'fell', 'dropped', 'decreased', 'declined', 'reduced'
+  ];
+  return trendKeywords.some(keyword => command.includes(keyword));
+};
+
+/**
+ * Parses a multi-conditional command
+ * @param {string} command - The command to parse
+ * @returns {Object} A structured action object
+ */
+const parseMultiConditionalCommand = (command) => {
+  console.log('Parsing multi-conditional command:', command);
+  
+  // Split by 'and' to get individual conditions
+  const parts = command.split(' and ');
+  
+  if (parts.length < 2) {
+    return { action: 'unknown', suggestion: 'Multi-conditional command parsing failed' };
+  }
+  
+  const conditions = [];
+  let targetType = 'state'; // default
+  
+  // Extract target type from the first part
+  if (command.includes('counties')) {
+    targetType = 'county';
+  } else if (command.includes('states')) {
+    targetType = 'state';
+  }
+  
+  // Parse each condition
+  for (const part of parts) {
+    const condition = parseIndividualCondition(part.trim());
+    if (condition) {
+      conditions.push(condition);
+    }
+  }
+  
+  if (conditions.length === 0) {
+    return { action: 'unknown', suggestion: 'No valid conditions found in multi-conditional command' };
+  }
+  
+  console.log('Parsed conditions:', conditions);
+  
+  return {
+    action: 'multi_filter',
+    targetType: targetType,
+    conditions: conditions,
+    operator: 'and'
+  };
+};
+
+/**
+ * Parses an individual condition
+ * @param {string} conditionText - The condition text to parse
+ * @returns {Object|null} A structured condition object or null if parsing failed
+ */
+const parseIndividualCondition = (conditionText) => {
+  console.log('Parsing individual condition:', conditionText);
+  
+  // Check for trend-based conditions
+  if (hasTrendKeywords(conditionText)) {
+    return parseTrendCondition(conditionText);
+  }
+  
+  // Use existing parseCondition for other types of conditions
+  return parseCondition(conditionText);
+};
+
+/**
+ * Parses a trend condition
+ * @param {string} conditionText - The condition text to parse
+ * @returns {Object|null} A structured trend condition object or null if parsing failed
+ */
+const parseTrendCondition = (conditionText) => {
+  let dataType = null;
+  let trend = null;
+  let timePeriod = { years: 2, type: 'recent' }; // default
+  
+  // Extract data type
+  if (conditionText.includes('income')) {
+    dataType = 'income';
+  } else if (conditionText.includes('crime')) {
+    dataType = 'crime_rates';
+  } else if (conditionText.includes('population')) {
+    dataType = 'population';
+  } else if (conditionText.includes('unemployment')) {
+    dataType = 'unemployment';
+  }
+  
+  // Extract trend direction
+  if (conditionText.includes('went up') || conditionText.includes('rose') || 
+      conditionText.includes('increased') || conditionText.includes('improved')) {
+    trend = 'increase';
+  } else if (conditionText.includes('fell') || conditionText.includes('dropped') || 
+             conditionText.includes('decreased') || conditionText.includes('declined')) {
+    trend = 'decrease';
+  }
+  
+  // Extract time period (if specified)
+  if (conditionText.includes('last') || conditionText.includes('past')) {
+    // Try to use existing parseTimePeriod function
+    const extractedTimePeriod = parseTimePeriod(conditionText);
+    if (extractedTimePeriod) {
+      timePeriod = extractedTimePeriod;
+    }
+  }
+  
+  if (!dataType || !trend) {
+    console.warn('Could not parse trend condition:', conditionText);
+    return null;
+  }
+  
+  return {
+    type: 'trend',
+    dataType: dataType,
+    trend: trend,
+    timePeriod: timePeriod
+  };
+};
+
+/**
+ * Parses a trend command
+ * @param {string} command - The command to parse
+ * @returns {Object} A structured action object
+ */
+const parseTrendCommand = (command) => {
+  // Handle single trend commands (not multi-conditional)
+  const condition = parseTrendCondition(command);
+  
+  if (!condition) {
+    return { action: 'unknown', suggestion: 'Could not parse trend command' };
+  }
+  
+  let targetType = 'state';
+  if (command.includes('counties')) {
+    targetType = 'county';
+  }
+  
+  return {
+    action: 'multi_filter',
+    targetType: targetType,
+    conditions: [condition],
+    operator: 'and'
+  };
+};
+
+/**
  * Interprets a command string and returns a structured action object
  * @param {string} commandText - The command text to interpret
  * @returns {Object} An action object with the appropriate properties
  */
 export function interpretCommand(commandText) {
   // Convert to lowercase for case-insensitive matching
-  const command = commandText.toLowerCase();
+  const command = commandText.toLowerCase().trim();
+  
+  console.log('=== Mock LLM Debug ===');
+  console.log('Input command:', commandText);
+  console.log('Normalized command:', command);
+  console.log('Contains "and":', command.includes(' and '));
+  console.log('Has trend keywords:', hasTrendKeywords(command));
   
   // Check for highlight California red command
   if (command.includes('highlight california red')) {
@@ -162,6 +387,93 @@ export function interpretCommand(commandText) {
     return {
       action: 'clearHighlights'
     };
+  }
+  
+  // Check for multi-conditional commands first (before single conditions)
+  if (command.includes(' and ')) {
+    return parseMultiConditionalCommand(command);
+  }
+  
+  // Check for time-series trend commands
+  if (hasTrendKeywords(command)) {
+    return parseTrendCommand(command);
+  }
+  
+  // Check for multi-conditional commands with time-series analysis (legacy pattern)
+  const multiConditionPatterns = [
+    /show\s+(\w+)\s+where\s+(.+?)\s+and\s+(.+)$/i,
+    /highlight\s+(\w+)\s+where\s+(.+?)\s+and\s+(.+)$/i,
+    /find\s+(\w+)\s+where\s+(.+?)\s+and\s+(.+)$/i,
+    /display\s+(\w+)\s+where\s+(.+?)\s+and\s+(.+)$/i
+  ];
+  
+  // Try to match any of the multi-condition patterns
+  for (const pattern of multiConditionPatterns) {
+    const match = command.match(pattern);
+    if (match) {
+      const [_, geoUnit, condition1Text, condition2Text] = match;
+      
+      // Normalize the geographic unit
+      const targetType = normalizeGeographicUnit(geoUnit);
+      
+      // Parse the first condition
+      const condition1 = parseCondition(condition1Text);
+      
+      // Parse the second condition
+      const condition2 = parseCondition(condition2Text);
+      
+      if (condition1 && condition2) {
+        return {
+          action: 'multi_filter',
+          targetType: targetType,
+          conditions: [condition1, condition2],
+          operator: 'and'
+        };
+      }
+    }
+  }
+  
+  // Check for time-series trend commands (legacy pattern)
+  const trendPatterns = [
+    /highlight\s+(\w+)\s+where\s+(\w+(?:\s+\w+)*)\s+(rose|increased|went up|improved|dropped|decreased|fell|declined|stayed stable|remained constant)\s+(?:for|over)\s+(.+)$/i,
+    /show\s+(\w+)\s+where\s+(\w+(?:\s+\w+)*)\s+(rose|increased|went up|improved|dropped|decreased|fell|declined|stayed stable|remained constant)\s+(?:for|over)\s+(.+)$/i,
+    /find\s+(\w+)\s+where\s+(\w+(?:\s+\w+)*)\s+has\s+(rose|increased|went up|improved|dropped|decreased|fell|declined|stayed stable|remained constant)\s+(?:for|over)\s+(.+)$/i
+  ];
+  
+  // Try to match any of the trend patterns
+  for (const pattern of trendPatterns) {
+    const match = command.match(pattern);
+    if (match) {
+      const [_, geoUnit, dataTypeText, trendText, timePeriodText] = match;
+      
+      // Normalize the geographic unit
+      const targetType = normalizeGeographicUnit(geoUnit);
+      
+      // Normalize the data type
+      const dataType = normalizeDataType(dataTypeText) || 'crime_rates';
+      
+      // Recognize the trend
+      const trend = recognizeTrend(trendText);
+      
+      // Parse the time period
+      const timePeriod = parseTimePeriod(timePeriodText);
+      
+      if (trend && timePeriod) {
+        return {
+          action: 'multi_filter',
+          targetType: targetType,
+          conditions: [
+            {
+              type: 'trend',
+              dataType: dataType,
+              trend: trend,
+              timePeriod: timePeriod
+            }
+          ],
+          operator: 'and'
+        };
+      }
+    }
   }
   
   // Check for conditional filtering commands
@@ -283,7 +595,75 @@ export function interpretCommand(commandText) {
     suggestions: [
       "show heatmap of crime rates",
       "highlight states with population over 10 million",
-      "display counties where unemployment is less than 5%"
+      "display counties where unemployment is less than 5%",
+      "show states where income rose for at least 3 of the last 5 years",
+      "find states where crime rates have dropped over the last 2 years"
     ]
   };
+}
+
+/**
+ * Helper function to parse a condition from text
+ * @param {string} conditionText - The text containing a condition
+ * @returns {Object|null} A structured condition object or null if parsing failed
+ */
+export function parseCondition(conditionText) {
+  if (!conditionText) return null;
+  
+  // Check for time-series trend condition
+  const trendPattern = /(\w+(?:\s+\w+)*)\s+(rose|increased|went up|improved|dropped|decreased|fell|declined|stayed stable|remained constant)\s+(?:for|over)\s+(.+)$/i;
+  const trendMatch = conditionText.match(trendPattern);
+  
+  if (trendMatch) {
+    const [_, dataTypeText, trendText, timePeriodText] = trendMatch;
+    
+    // Normalize the data type
+    const dataType = normalizeDataType(dataTypeText) || 'crime_rates';
+    
+    // Recognize the trend
+    const trend = recognizeTrend(trendText);
+    
+    // Parse the time period
+    const timePeriod = parseTimePeriod(timePeriodText);
+    
+    if (trend && timePeriod) {
+      return {
+        type: 'trend',
+        dataType: dataType,
+        trend: trend,
+        timePeriod: timePeriod
+      };
+    }
+  }
+  
+  // Check for value-based condition
+  const valuePattern = /(\w+(?:\s+\w+)*)\s+(?:is\s+)?(over|above|greater than|>|under|below|less than|<|equal to|equals|=|at least|>=|at most|<=)\s+(.+)$/i;
+  const valueMatch = conditionText.match(valuePattern);
+  
+  if (valueMatch) {
+    const [_, dataTypeText, operatorText, valueText] = valueMatch;
+    
+    // Normalize the data type
+    const dataType = normalizeDataType(dataTypeText) || 'crime_rates';
+    
+    // Normalize the operator
+    const operator = normalizeOperator(operatorText);
+    
+    // Parse the value
+    const value = parseNumberExpression(valueText);
+    
+    if (operator && value !== null) {
+      return {
+        type: 'value',
+        dataType: dataType,
+        condition: {
+          operator: operator,
+          value: value,
+          originalValue: valueText.trim()
+        }
+      };
+    }
+  }
+  
+  return null;
 } 
