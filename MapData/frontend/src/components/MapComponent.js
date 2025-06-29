@@ -1577,6 +1577,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         // Handle the new simple highlight action
         applySimpleHighlight(result.targetType, result.locations, result.color, result.isMultiple, result.invalidLocations);
         break;
+      case 'analytical_filter':
+        // Handle the new analytical filter action
+        applyAnalyticalFilter(result);
+        break;
       case 'clarify':
         // Handle clarification requests
         handleClarification(result);
@@ -2047,18 +2051,217 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
   // Test function for statistics library integration
   const testStatsIntegration = () => {
     console.log('Testing statistics library integration...');
-    const success = testStatisticsLibrary();
-    if (success) {
-      console.log('Statistics library is ready for use!');
-    } else {
-      console.error('Statistics library integration failed!');
+    testStatisticsLibrary();
+  };
+
+  // Analytical Filter Functions
+  const applyAnalyticalFilter = (command) => {
+    console.log('🔬 Executing analytical filter:', command);
+    
+    const { functionName, dataTypes, threshold, visualStyle, targetType } = command;
+    
+    try {
+      // Get the appropriate data for analysis
+      const analysisData = prepareAnalysisData(dataTypes, targetType);
+      if (!analysisData || analysisData.length === 0) {
+        console.error('❌ No data available for analysis');
+        return;
+      }
+      
+      console.log(`📊 Analyzing ${analysisData.length} ${targetType}s using ${functionName}`);
+      
+      // Calculate the analytical function for each geographic unit
+      const results = calculateAnalyticalResults(analysisData, functionName, dataTypes);
+      
+      // Filter results based on threshold
+      const filteredResults = filterByThreshold(results, threshold);
+      
+      console.log(`🎯 Found ${filteredResults.length} ${targetType}s meeting criteria`);
+      
+      // Apply visual highlighting to filtered results
+      highlightFilteredResults(filteredResults, visualStyle, targetType);
+      
+      console.log(`✅ Analytical filter applied: ${filteredResults.length} units highlighted`);
+      
+    } catch (error) {
+      console.error('❌ Error in applyAnalyticalFilter:', error);
     }
   };
 
-  // Test statistics integration on component mount (temporary for verification)
-  useEffect(() => {
-    testStatsIntegration();
-  }, []);
+  const prepareAnalysisData = (dataTypes, targetType) => {
+    console.log(`📊 Preparing analysis data for ${dataTypes.join(', ')} on ${targetType} level`);
+    
+    // Mock data sets - replace with your actual data source
+    // Using FIPS codes that match the state data structure
+    const mockDataSets = {
+      crime_rates: {
+        '06': 0.15, '48': 0.12, '12': 0.10, '36': 0.08, '42': 0.09,
+        '17': 0.11, '39': 0.07, '13': 0.13, '37': 0.06, '26': 0.14
+      },
+      income: {
+        '06': 75.2, '48': 59.8, '12': 55.7, '36': 68.3, '42': 61.2,
+        '17': 65.9, '39': 56.1, '13': 58.4, '37': 54.6, '26': 57.3
+      },
+      population: {
+        '06': 39.5, '48': 29.1, '12': 21.5, '36': 19.8, '42': 12.8,
+        '17': 12.7, '39': 11.7, '13': 10.6, '37': 10.4, '26': 10.0
+      },
+      unemployment: {
+        '06': 0.074, '48': 0.052, '12': 0.048, '36': 0.063, '42': 0.055,
+        '17': 0.067, '39': 0.049, '13': 0.041, '37': 0.044, '26': 0.071
+      }
+    };
+    
+    // Get all unique geographic units
+    const allUnits = new Set();
+    dataTypes.forEach(dataType => {
+      if (mockDataSets[dataType]) {
+        Object.keys(mockDataSets[dataType]).forEach(unit => allUnits.add(unit));
+      }
+    });
+    
+    // Prepare analysis data structure
+    const analysisData = Array.from(allUnits).map(unit => {
+      const unitData = { id: unit };
+      dataTypes.forEach(dataType => {
+        if (mockDataSets[dataType] && mockDataSets[dataType][unit] !== undefined) {
+          unitData[dataType] = mockDataSets[dataType][unit];
+        }
+      });
+      return unitData;
+    });
+    
+    console.log(`✅ Prepared data for ${analysisData.length} units`);
+    return analysisData;
+  };
+
+  const calculateAnalyticalResults = (analysisData, functionName, dataTypes) => {
+    console.log(`🧮 Calculating ${functionName} for each geographic unit`);
+    
+    const results = analysisData.map(unitData => {
+      let calculatedValue;
+      
+      try {
+        switch (functionName) {
+          case 'mean':
+            const values = dataTypes.map(dt => unitData[dt]).filter(v => v !== undefined);
+            calculatedValue = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+            break;
+            
+          case 'correlation':
+            if (dataTypes.length >= 2) {
+              const x = unitData[dataTypes[0]];
+              const y = unitData[dataTypes[1]];
+              // For individual units, we'll use a mock correlation based on the relationship
+              calculatedValue = x && y ? mockCorrelation(x, y) : null;
+            }
+            break;
+            
+          case 'sum':
+            const sumValues = dataTypes.map(dt => unitData[dt]).filter(v => v !== undefined);
+            calculatedValue = sumValues.length > 0 ? sumValues.reduce((a, b) => a + b, 0) : null;
+            break;
+            
+          case 'standardDeviation':
+            // For individual units, we'll calculate based on historical variance (mocked)
+            const baseValue = unitData[dataTypes[0]];
+            calculatedValue = baseValue ? baseValue * 0.15 : null; // Mock std dev as 15% of base value
+            break;
+            
+          default:
+            calculatedValue = unitData[dataTypes[0]]; // Default to first data type value
+        }
+        
+        return {
+          id: unitData.id,
+          value: calculatedValue,
+          rawData: unitData
+        };
+        
+      } catch (error) {
+        console.error(`❌ Error calculating ${functionName} for ${unitData.id}:`, error);
+        return {
+          id: unitData.id,
+          value: null,
+          rawData: unitData
+        };
+      }
+    });
+    
+    console.log(`✅ Calculated results for ${results.length} units`);
+    return results.filter(r => r.value !== null);
+  };
+
+  const mockCorrelation = (x, y) => {
+    // Simple mock correlation calculation
+    // In a real implementation, you'd calculate correlation across multiple data points
+    const normalizedX = x / 100; // Normalize to 0-1 range
+    const normalizedY = y / 100;
+    
+    // Mock correlation based on how similar the normalized values are
+    const difference = Math.abs(normalizedX - normalizedY);
+    const correlation = 1 - (difference * 2); // Convert difference to correlation
+    
+    return Math.max(-1, Math.min(1, correlation)); // Clamp to [-1, 1] range
+  };
+
+  const filterByThreshold = (results, threshold) => {
+    console.log(`🎯 Filtering ${results.length} results by threshold:`, threshold);
+    
+    const filtered = results.filter(result => {
+      switch (threshold.operator) {
+        case 'gt':
+          return result.value > threshold.value;
+        case 'lt':
+          return result.value < threshold.value;
+        case 'eq':
+          return Math.abs(result.value - threshold.value) < 0.01; // Allow small floating point differences
+        default:
+          return false;
+      }
+    });
+    
+    console.log(`✅ Filtered to ${filtered.length} results meeting criteria`);
+    return filtered;
+  };
+
+  const highlightFilteredResults = (filteredResults, visualStyle, targetType) => {
+    console.log(`🎨 Highlighting ${filteredResults.length} ${targetType}s in ${visualStyle.color}`);
+    
+    try {
+      // Clear existing highlights first
+      clearHighlights();
+      
+      // Create highlighting objects for the state variables
+      const newHighlights = {};
+      
+      filteredResults.forEach(result => {
+        newHighlights[result.id] = visualStyle.color;
+      });
+      
+      // Update the appropriate state variable
+      if (targetType === 'county') {
+        setHighlightedCounties(newHighlights);
+      } else {
+        setHighlightedStates(newHighlights);
+      }
+      
+      console.log(`✅ Successfully highlighted ${filteredResults.length} ${targetType}s in ${visualStyle.color}`);
+      
+    } catch (error) {
+      console.error('❌ Error highlighting filtered results:', error);
+    }
+  };
+
+  const clearHighlights = () => {
+    console.log('🧹 Clearing existing highlights...');
+    
+    // Clear state and county highlights by setting empty objects
+    setHighlightedStates({});
+    setHighlightedCounties({});
+    
+    console.log('✅ Cleared all highlights');
+  };
 
   return (
     <>

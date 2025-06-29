@@ -783,6 +783,13 @@ export function interpretCommand(commandText) {
   console.log('=== Mock LLM Debug ===');
   console.log('Input command:', commandText);
   console.log('Normalized command:', command);
+  
+  // Check for analytical filter commands FIRST
+  if (isAnalyticalFilterCommand(command)) {
+    console.log('🔬 Detected analytical filter command');
+    return parseAnalyticalFilterCommand(command);
+  }
+  
   console.log('Is ambiguous:', isAmbiguousQuery(command));
   console.log('Is simple highlight:', isSimpleHighlightCommand(command));
   console.log('Is ranking command:', isRankingCommand(command));
@@ -1706,4 +1713,104 @@ const getStateIdFromName = (locationName) => {
   // Normalize location name (lowercase, handle spaces)
   const normalizedLocation = locationName.toLowerCase().trim();
   return stateNameToFips[normalizedLocation];
-}; 
+};
+
+// Add this function to detect analytical filter commands
+function isAnalyticalFilterCommand(command) {
+  const analyticalFilterPatterns = [
+    // Pattern: "highlight/show states where [function] [data] [operator] [value]"
+    /(?:highlight|show|find)\s+(?:states|counties).*where\s+(?:correlation|mean|average|median|sum|std|standard deviation).*(?:above|below|over|under|greater than|less than)\s*[\d.]+/i,
+    
+    // Pattern: "states in [color] where [function] [data] [operator] [value]"
+    /(?:states|counties).*(?:in\s+(?:red|blue|green|yellow|orange|purple)).*where.*(?:correlation|mean|average|median|sum|std|standard deviation).*(?:above|below|over|under|greater than|less than)\s*[\d.]+/i,
+    
+    // Pattern: "where [function] of [data] [operator] [value]"
+    /where\s+(?:correlation|mean|average|median|sum|std|standard deviation)\s+of\s+\w+.*(?:above|below|over|under|greater than|less than)\s*[\d.]+/i
+  ];
+  
+  return analyticalFilterPatterns.some(pattern => pattern.test(command));
+}
+
+// Add this function to parse analytical filter commands
+function parseAnalyticalFilterCommand(command) {
+  console.log('🔍 Parsing analytical filter command:', command);
+  
+  // Extract analytical function
+  const functionPatterns = [
+    { pattern: /\b(?:mean|average)\b/i, name: 'mean' },
+    { pattern: /\bmedian\b/i, name: 'median' },
+    { pattern: /\bsum\b/i, name: 'sum' },
+    { pattern: /\b(?:std|standard deviation)\b/i, name: 'standardDeviation' },
+    { pattern: /\bvariance\b/i, name: 'variance' },
+    { pattern: /\bcorrelation\b/i, name: 'correlation' }
+  ];
+  
+  let functionName = null;
+  for (const { pattern, name } of functionPatterns) {
+    if (pattern.test(command)) {
+      functionName = name;
+      break;
+    }
+  }
+  
+  // Extract data types
+  const dataTypePatterns = [
+    { pattern: /\b(?:crime|crime rates?)\b/i, name: 'crime_rates' },
+    { pattern: /\b(?:income|salary|wages?)\b/i, name: 'income' },
+    { pattern: /\b(?:population|people)\b/i, name: 'population' },
+    { pattern: /\b(?:unemployment|jobless)\b/i, name: 'unemployment' }
+  ];
+  
+  const dataTypes = [];
+  for (const { pattern, name } of dataTypePatterns) {
+    if (pattern.test(command)) {
+      dataTypes.push(name);
+    }
+  }
+  
+  // Extract threshold condition
+  const thresholdPatterns = [
+    { pattern: /(?:above|over|greater than)\s*([\d.]+)/i, operator: 'gt' },
+    { pattern: /(?:below|under|less than)\s*([\d.]+)/i, operator: 'lt' },
+    { pattern: /(?:equals?|is)\s*([\d.]+)/i, operator: 'eq' }
+  ];
+  
+  let threshold = null;
+  for (const { pattern, operator } of thresholdPatterns) {
+    const match = command.match(pattern);
+    if (match) {
+      threshold = {
+        operator: operator,
+        value: parseFloat(match[1])
+      };
+      break;
+    }
+  }
+  
+  // Extract color specification
+  const colorMatch = command.match(/(?:in\s+)?(red|blue|green|yellow|orange|purple)/i);
+  const color = colorMatch ? colorMatch[1].toLowerCase() : 'red';
+  
+  // Extract target type (states or counties)
+  const targetType = /counties?/i.test(command) ? 'county' : 'state';
+  
+  console.log('🔍 Parsed analytical filter:', {
+    functionName,
+    dataTypes,
+    threshold,
+    color,
+    targetType
+  });
+  
+  return {
+    action: 'analytical_filter',
+    functionName: functionName,
+    dataTypes: dataTypes,
+    threshold: threshold,
+    visualStyle: {
+      color: color,
+      type: 'highlight'
+    },
+    targetType: targetType
+  };
+} 
