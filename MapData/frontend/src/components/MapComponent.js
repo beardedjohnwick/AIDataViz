@@ -486,7 +486,8 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         return;
       }
       
-      let meetsAllConditions = true;
+      let meetsConditions = false;
+      const conditionResults = [];
       
       for (const condition of conditions) {
         let meetsThisCondition = false;
@@ -507,8 +508,12 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
             const value = data[fipsCode];
             let adjustedConditionValue = condition.condition.value;
             
+            // Apply data type-specific adjustments
             if (condition.dataType === 'population') {
               adjustedConditionValue = condition.condition.value / 1000000;
+            } else if (condition.dataType === 'income') {
+              // Income data is stored in thousands, but user input is in raw dollars
+              adjustedConditionValue = condition.condition.value / 1000;
             }
             
             switch (condition.condition.operator) {
@@ -527,20 +532,39 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
               case 'lte':
                 meetsThisCondition = value <= adjustedConditionValue;
                 break;
+              default:
+                console.warn('Unknown operator:', condition.condition.operator);
             }
+            
+            // Add debug logging for value conditions
+            console.log('Value condition debug:', {
+              fipsCode,
+              dataType: condition.dataType,
+              originalValue: condition.condition.value,
+              adjustedValue: adjustedConditionValue,
+              mockDataValue: value,
+              operator: condition.condition.operator,
+              meetsCondition: meetsThisCondition
+            });
           }
         }
         
-        if (operator === 'and' && !meetsThisCondition) {
-          meetsAllConditions = false;
-          break;
-        } else if (operator === 'or' && meetsThisCondition) {
-          meetsAllConditions = true;
+        conditionResults.push(meetsThisCondition);
+        
+        // For OR logic, if any condition is met, we can break early
+        if (operator === 'or' && meetsThisCondition) {
+          meetsConditions = true;
           break;
         }
       }
       
-      if (meetsAllConditions) {
+      // For AND logic, all conditions must be met
+      if (operator === 'and') {
+        meetsConditions = conditionResults.every(result => result === true);
+      }
+      // For OR logic, at least one condition must be met (handled above)
+      
+      if (meetsConditions) {
         filteredData[fipsCode] = '#3388ff'; // Highlight color (blue)
       }
     });
@@ -559,8 +583,8 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     }
     
     console.log('Multi-filter results:', {
-      conditions,
       operator,
+      conditions: conditions.length,
       matchCount: Object.keys(filteredData).length,
       matches: Object.keys(filteredData)
     });
@@ -1227,6 +1251,9 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       if (dataType === 'population') {
         // Population data is stored in millions, but user input is in raw numbers
         adjustedConditionValue = condition.value / 1000000;
+      } else if (dataType === 'income') {
+        // Income data is stored in thousands, but user input is in raw dollars
+        adjustedConditionValue = condition.value / 1000;
       }
       
       let meetsCondition = false;
@@ -1247,6 +1274,8 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         case 'lte':
           meetsCondition = value <= adjustedConditionValue;
           break;
+        default:
+          console.warn('Unknown operator:', condition.operator);
       }
       
       if (meetsCondition) {
@@ -1261,7 +1290,8 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     console.log('Filter Debug:', {
       dataType,
       originalValue: condition.value,
-      adjustedValue: dataType === 'population' ? condition.value / 1000000 : condition.value,
+      adjustedValue: dataType === 'population' ? condition.value / 1000000 : 
+                    dataType === 'income' ? condition.value / 1000 : condition.value,
       operator: condition.operator,
       sampleDataValue: Object.values(data)[0],
       matchCount: Object.keys(filteredData).length

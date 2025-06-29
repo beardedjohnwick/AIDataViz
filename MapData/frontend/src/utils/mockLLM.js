@@ -215,12 +215,34 @@ const hasTrendKeywords = (command) => {
 const parseMultiConditionalCommand = (command) => {
   console.log('Parsing multi-conditional command:', command);
   
-  // Split by 'and' to get individual conditions
-  const parts = command.split(' and ');
+  let operator = 'and'; // default
+  let parts = [];
+  
+  // Determine the operator and split accordingly
+  if (command.includes(' and ') && command.includes(' or ')) {
+    // Handle mixed operators - for now, prioritize the first one found
+    if (command.indexOf(' and ') < command.indexOf(' or ')) {
+      operator = 'and';
+      parts = command.split(' and ');
+    } else {
+      operator = 'or';
+      parts = command.split(' or ');
+    }
+    console.log('Mixed operators detected, using:', operator);
+  } else if (command.includes(' and ')) {
+    operator = 'and';
+    parts = command.split(' and ');
+  } else if (command.includes(' or ')) {
+    operator = 'or';
+    parts = command.split(' or ');
+  }
   
   if (parts.length < 2) {
     return { action: 'unknown', suggestion: 'Multi-conditional command parsing failed' };
   }
+  
+  console.log('Operator:', operator);
+  console.log('Parts:', parts);
   
   const conditions = [];
   let targetType = 'state'; // default
@@ -245,12 +267,13 @@ const parseMultiConditionalCommand = (command) => {
   }
   
   console.log('Parsed conditions:', conditions);
+  console.log('Final operator:', operator);
   
   return {
     action: 'multi_filter',
     targetType: targetType,
     conditions: conditions,
-    operator: 'and'
+    operator: operator
   };
 };
 
@@ -262,13 +285,95 @@ const parseMultiConditionalCommand = (command) => {
 const parseIndividualCondition = (conditionText) => {
   console.log('Parsing individual condition:', conditionText);
   
-  // Check for trend-based conditions
+  // Check for trend-based conditions first
   if (hasTrendKeywords(conditionText)) {
     return parseTrendCondition(conditionText);
   }
   
-  // Use existing parseCondition for other types of conditions
-  return parseCondition(conditionText);
+  // Check for value-based conditions
+  return parseValueCondition(conditionText);
+};
+
+/**
+ * Parses a value-based condition
+ * @param {string} conditionText - The condition text to parse
+ * @returns {Object|null} A structured value condition object or null if parsing failed
+ */
+const parseValueCondition = (conditionText) => {
+  let dataType = null;
+  let operator = null;
+  let value = null;
+  let originalValue = null;
+  
+  // Extract data type
+  if (conditionText.includes('income')) {
+    dataType = 'income';
+  } else if (conditionText.includes('crime')) {
+    dataType = 'crime_rates';
+  } else if (conditionText.includes('population')) {
+    dataType = 'population';
+  } else if (conditionText.includes('unemployment')) {
+    dataType = 'unemployment';
+  }
+  
+  // Extract operator and value
+  if (conditionText.includes('high') || conditionText.includes('above average')) {
+    // For "high crime rates" or "high income", use a reasonable threshold
+    operator = 'gt';
+    if (dataType === 'crime_rates') {
+      value = 0.1; // 10% crime rate threshold
+      originalValue = 'high';
+    } else if (dataType === 'income') {
+      value = 65000; // $65k income threshold
+      originalValue = 'high';
+    } else if (dataType === 'unemployment') {
+      value = 0.07; // 7% unemployment threshold
+      originalValue = 'high';
+    } else if (dataType === 'population') {
+      value = 15000000; // 15M population threshold
+      originalValue = 'high';
+    }
+  } else if (conditionText.includes('low') || conditionText.includes('below average')) {
+    // For "low income" or "low crime rates"
+    operator = 'lt';
+    if (dataType === 'crime_rates') {
+      value = 0.08; // 8% crime rate threshold
+      originalValue = 'low';
+    } else if (dataType === 'income') {
+      value = 60000; // $60k income threshold
+      originalValue = 'low';
+    } else if (dataType === 'unemployment') {
+      value = 0.06; // 6% unemployment threshold
+      originalValue = 'low';
+    } else if (dataType === 'population') {
+      value = 10000000; // 10M population threshold
+      originalValue = 'low';
+    }
+  }
+  
+  // Handle explicit numerical conditions (existing logic)
+  if (!operator && (conditionText.includes('over') || conditionText.includes('above') || conditionText.includes('greater than'))) {
+    operator = 'gt';
+    // Extract numerical value (you can reuse existing number parsing logic here)
+  } else if (!operator && (conditionText.includes('under') || conditionText.includes('below') || conditionText.includes('less than'))) {
+    operator = 'lt';
+    // Extract numerical value
+  }
+  
+  if (!dataType || !operator || value === null) {
+    console.warn('Could not parse value condition:', conditionText);
+    return null;
+  }
+  
+  return {
+    type: 'value',
+    dataType: dataType,
+    condition: {
+      operator: operator,
+      value: value,
+      originalValue: originalValue
+    }
+  };
 };
 
 /**
@@ -362,6 +467,7 @@ export function interpretCommand(commandText) {
   console.log('Input command:', commandText);
   console.log('Normalized command:', command);
   console.log('Contains "and":', command.includes(' and '));
+  console.log('Contains "or":', command.includes(' or '));
   console.log('Has trend keywords:', hasTrendKeywords(command));
   
   // Check for highlight California red command
@@ -390,7 +496,7 @@ export function interpretCommand(commandText) {
   }
   
   // Check for multi-conditional commands first (before single conditions)
-  if (command.includes(' and ')) {
+  if (command.includes(' and ') || command.includes(' or ')) {
     return parseMultiConditionalCommand(command);
   }
   

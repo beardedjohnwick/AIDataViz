@@ -1,3 +1,33 @@
+# v1.6.9 - OR Conditions
+
+## Major Changes
+- Added support for 'OR' logic in multi-conditional filtering
+- Enhanced data type handling for income values
+- Improved condition evaluation logic for complex queries
+- Added detailed debug logging for condition evaluation
+
+## Frontend Changes
+- Updated MapComponent.js to support OR condition logic in applyMultiFilter
+- Enhanced mockLLM.js to detect and parse OR conditions in commands
+- Added income data type-specific adjustments (converting raw dollars to thousands)
+- Implemented more robust condition evaluation with detailed debug logging
+- Added support for parsing high/low value conditions for different data types
+
+# v1.6.8 - Multi-Conditional and Basic Time-Series Queries
+
+## Major Changes
+- Implemented multi-conditional filtering with support for 'and' operations
+- Added basic time-series query capabilities for trend analysis
+- Enhanced mockLLM with time period parsing functionality
+- Improved command interpretation for complex data queries
+
+## Frontend Changes
+- Added applyMultiFilter function in MapComponent.js to handle multiple conditions
+- Implemented analyzeTimeTrend and checkTrendDirection functions for time-series analysis
+- Enhanced mockLLM.js with parseTimePeriod and recognizeTrend functions
+- Added support for parsing complex time expressions like "last X years"
+- Improved command parsing for multi-conditional queries
+
 # v1.6.7 - Population Data Comparison Fix
 
 ## Major Changes
