@@ -470,6 +470,11 @@ export function interpretCommand(commandText) {
   console.log('Contains "or":', command.includes(' or '));
   console.log('Has trend keywords:', hasTrendKeywords(command));
   
+  // Check for multi-color highlighting commands
+  if (isMultiColorCommand(command)) {
+    return parseMultiColorCommand(command);
+  }
+  
   // Check for highlight California red command
   if (command.includes('highlight california red')) {
     return {
@@ -772,4 +777,184 @@ export function parseCondition(conditionText) {
   }
   
   return null;
-} 
+}
+
+/**
+ * Checks if a command is a multi-color highlighting command
+ * @param {string} command - The command to check
+ * @returns {boolean} True if the command is a multi-color highlighting command
+ */
+const isMultiColorCommand = (command) => {
+  // Look for color keywords combined with "and"
+  const colorKeywords = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink'];
+  const hasColors = colorKeywords.some(color => command.includes(` in ${color}`) || command.includes(` ${color}`));
+  const hasMultipleConditions = command.includes(' and ');
+  
+  console.log('Multi-color detection:', { hasColors, hasMultipleConditions });
+  return hasColors && hasMultipleConditions;
+};
+
+/**
+ * Parses a multi-color command
+ * @param {string} command - The command to parse
+ * @returns {Object} A structured action object
+ */
+const parseMultiColorCommand = (command) => {
+  console.log('Parsing multi-color command:', command);
+  
+  // Split by "and" to get individual colored conditions
+  const parts = command.split(' and ');
+  const coloredConditions = [];
+  let targetType = 'state'; // default
+  
+  // Extract target type
+  if (command.includes('counties')) {
+    targetType = 'county';
+  } else if (command.includes('states')) {
+    targetType = 'state';
+  }
+  
+  for (const part of parts) {
+    const coloredCondition = parseColoredCondition(part.trim());
+    if (coloredCondition) {
+      coloredConditions.push(coloredCondition);
+    }
+  }
+  
+  if (coloredConditions.length === 0) {
+    return { action: 'unknown', suggestion: 'No valid colored conditions found' };
+  }
+  
+  console.log('Parsed colored conditions:', coloredConditions);
+  
+  return {
+    action: 'multi_color_highlight',
+    targetType: targetType,
+    coloredConditions: coloredConditions
+  };
+};
+
+/**
+ * Parses a colored condition
+ * @param {string} conditionText - The condition text to parse
+ * @returns {Object|null} A structured colored condition object or null if parsing failed
+ */
+const parseColoredCondition = (conditionText) => {
+  console.log('Parsing colored condition:', conditionText);
+  
+  // Extract color from the condition
+  const colorKeywords = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink'];
+  let color = null;
+  
+  for (const colorKeyword of colorKeywords) {
+    if (conditionText.includes(` in ${colorKeyword}`) || conditionText.includes(` ${colorKeyword}`)) {
+      color = colorKeyword;
+      // Remove the color part from the condition text for parsing
+      conditionText = conditionText.replace(` in ${colorKeyword}`, '').replace(` ${colorKeyword}`, '');
+      break;
+    }
+  }
+  
+  if (!color) {
+    console.warn('No color found in condition:', conditionText);
+    return null;
+  }
+  
+  // Parse the actual condition (reuse existing logic)
+  let condition = null;
+  
+  // Check for trend-based conditions
+  if (hasTrendKeywords(conditionText)) {
+    condition = parseTrendCondition(conditionText);
+  } else {
+    // Parse value-based conditions
+    condition = parseValueConditionForColor(conditionText);
+  }
+  
+  if (!condition) {
+    console.warn('Could not parse condition:', conditionText);
+    return null;
+  }
+  
+  return {
+    condition: condition,
+    color: color
+  };
+};
+
+/**
+ * Parses a value condition specifically for colored conditions
+ * @param {string} conditionText - The condition text to parse
+ * @returns {Object|null} A structured value condition object or null if parsing failed
+ */
+const parseValueConditionForColor = (conditionText) => {
+  let dataType = null;
+  let operator = null;
+  let value = null;
+  let originalValue = null;
+  
+  // Extract data type
+  if (conditionText.includes('population')) {
+    dataType = 'population';
+  } else if (conditionText.includes('crime')) {
+    dataType = 'crime_rates';
+  } else if (conditionText.includes('income')) {
+    dataType = 'income';
+  } else if (conditionText.includes('unemployment')) {
+    dataType = 'unemployment';
+  } else if (conditionText.includes('land area') || conditionText.includes('area')) {
+    dataType = 'land_area';
+  }
+  
+  // Extract operator and value
+  if (conditionText.includes('over') || conditionText.includes('above') || conditionText.includes('greater than')) {
+    operator = 'gt';
+    // Extract numerical value
+    const numberMatch = conditionText.match(/(\d+(?:\.\d+)?)\s*(million|thousand|k)?/);
+    if (numberMatch) {
+      let numValue = parseFloat(numberMatch[1]);
+      const unit = numberMatch[2];
+      
+      if (unit === 'million') {
+        numValue *= 1000000;
+      } else if (unit === 'thousand' || unit === 'k') {
+        numValue *= 1000;
+      }
+      
+      value = numValue;
+      originalValue = numberMatch[0];
+    }
+  } else if (conditionText.includes('under') || conditionText.includes('below') || conditionText.includes('less than')) {
+    operator = 'lt';
+    // Similar number extraction logic
+    const numberMatch = conditionText.match(/(\d+(?:\.\d+)?)\s*(million|thousand|k)?/);
+    if (numberMatch) {
+      let numValue = parseFloat(numberMatch[1]);
+      const unit = numberMatch[2];
+      
+      if (unit === 'million') {
+        numValue *= 1000000;
+      } else if (unit === 'thousand' || unit === 'k') {
+        numValue *= 1000;
+      }
+      
+      value = numValue;
+      originalValue = numberMatch[0];
+    }
+  }
+  
+  if (!dataType || !operator || value === null) {
+    console.warn('Could not parse value condition for color:', conditionText);
+    return null;
+  }
+  
+  return {
+    type: 'value',
+    dataType: dataType,
+    condition: {
+      operator: operator,
+      value: value,
+      originalValue: originalValue
+    }
+  };
+}; 

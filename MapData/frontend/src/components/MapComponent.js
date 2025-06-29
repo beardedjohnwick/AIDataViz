@@ -379,6 +379,19 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       '04': 0.078, '13': 0.052, '26': 0.088, '39': 0.071, '51': 0.045,
       // County data
       '06037': 0.082, '36061': 0.076, '17031': 0.074, '48201': 0.068, '06075': 0.054
+    },
+    // Land area data (in thousands of square miles)
+    land_area: {
+      '02': 665.4, // Alaska - largest state
+      '48': 268.6, // Texas - second largest
+      '06': 163.7, // California
+      '30': 147.0, // Montana
+      '35': 121.6, // New Mexico
+      '04': 113.9, // Arizona
+      '38': 70.7,  // North Dakota
+      '56': 97.8,  // Wyoming
+      '31': 77.4,  // Nebraska
+      '39': 44.8   // Ohio
     }
   };
 
@@ -1351,6 +1364,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         // Handle the new multi-condition filter action
         applyMultiFilter(result.targetType, result.conditions, result.operator);
         break;
+      case 'multi_color_highlight':
+        // Handle the new multi-color highlight action
+        applyMultiColorHighlight(result.targetType, result.coloredConditions);
+        break;
       case 'unknown':
       default:
         console.warn("Unknown command:", commandString);
@@ -1397,10 +1414,23 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     
     // Check if this state is highlighted
     if (fipsCode && highlightedStates[fipsCode]) {
+      const color = highlightedStates[fipsCode];
+      
+      // If the color is a string like 'red', 'blue', etc. use it directly
+      if (typeof color === 'string' && !color.startsWith('#')) {
+        return {
+          color: 'black',
+          weight: 1,
+          fillColor: color,
+          fillOpacity: 0.7
+        };
+      }
+      
+      // Otherwise, use the color as is (could be a hex value or a numeric value)
       return {
         color: 'black',
         weight: 1,
-        fillColor: highlightedStates[fipsCode],
+        fillColor: color,
         fillOpacity: 0.7
       };
     }
@@ -1427,10 +1457,23 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     
     // Check if this county is highlighted
     if (fipsCode && highlightedCounties[fipsCode]) {
+      const color = highlightedCounties[fipsCode];
+      
+      // If the color is a string like 'red', 'blue', etc. use it directly
+      if (typeof color === 'string' && !color.startsWith('#')) {
+        return {
+          color: '#444',
+          weight: 0.5,
+          fillColor: color,
+          fillOpacity: 0.7
+        };
+      }
+      
+      // Otherwise, use the color as is (could be a hex value or a numeric value)
       return {
         color: '#444',
         weight: 0.5,
-        fillColor: highlightedCounties[fipsCode],
+        fillColor: color,
         fillOpacity: 0.7
       };
     }
@@ -1449,6 +1492,112 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     }
     
     return countyStyle;
+  };
+
+  // Function to apply multi-color highlighting
+  const applyMultiColorHighlight = (targetType, coloredConditions) => {
+    console.log('Applying multi-color highlight:', { targetType, coloredConditions });
+    
+    const coloredData = {};
+    const overlappingData = {}; // Track which states meet multiple conditions
+    
+    // Process each colored condition
+    for (const coloredCondition of coloredConditions) {
+      const { condition, color } = coloredCondition;
+      const conditionResults = {};
+      
+      if (condition.type === 'trend') {
+        // Handle trend conditions
+        const historicalData = mockHistoricalData[condition.dataType];
+        if (historicalData) {
+          Object.keys(historicalData).forEach(fipsCode => {
+            if (analyzeTimeTrend(historicalData[fipsCode], condition.trend, condition.timePeriod)) {
+              conditionResults[fipsCode] = color;
+            }
+          });
+        }
+      } else if (condition.type === 'value') {
+        // Handle value conditions
+        const data = mockDataSets[condition.dataType];
+        if (data) {
+          Object.entries(data).forEach(([fipsCode, value]) => {
+            let adjustedConditionValue = condition.condition.value;
+            
+            // Apply data type-specific adjustments
+            if (condition.dataType === 'population') {
+              adjustedConditionValue = condition.condition.value / 1000000;
+            } else if (condition.dataType === 'land_area') {
+              adjustedConditionValue = condition.condition.value / 1000; // Convert to thousands
+            }
+            
+            let meetsCondition = false;
+            switch (condition.condition.operator) {
+              case 'gt':
+                meetsCondition = value > adjustedConditionValue;
+                break;
+              case 'lt':
+                meetsCondition = value < adjustedConditionValue;
+                break;
+              case 'eq':
+                meetsCondition = value === adjustedConditionValue;
+                break;
+              case 'gte':
+                meetsCondition = value >= adjustedConditionValue;
+                break;
+              case 'lte':
+                meetsCondition = value <= adjustedConditionValue;
+                break;
+            }
+            
+            if (meetsCondition) {
+              conditionResults[fipsCode] = color;
+            }
+          });
+        }
+      }
+      
+      // Merge results and track overlaps
+      Object.entries(conditionResults).forEach(([fipsCode, newColor]) => {
+        if (coloredData[fipsCode]) {
+          // This state already has a color - it's an overlap
+          if (!overlappingData[fipsCode]) {
+            overlappingData[fipsCode] = [coloredData[fipsCode]];
+          }
+          overlappingData[fipsCode].push(newColor);
+          coloredData[fipsCode] = newColor; // For now, last color wins
+        } else {
+          coloredData[fipsCode] = newColor;
+        }
+      });
+    }
+    
+    // Convert colors to highlight values for the existing highlighting system
+    const highlightData = {};
+    Object.entries(coloredData).forEach(([fipsCode, color]) => {
+      // Map colors to actual color values
+      highlightData[fipsCode] = color;
+    });
+    
+    // Apply highlighting
+    if (targetType === 'state') {
+      setHighlightedStates(highlightData);
+    } else {
+      setHighlightedCounties(highlightData);
+    }
+    
+    console.log('Multi-color highlight results:', {
+      totalHighlighted: Object.keys(coloredData).length,
+      overlapping: Object.keys(overlappingData).length,
+      colorBreakdown: coloredConditions.map(cc => ({
+        color: cc.color,
+        count: Object.values(coloredData).filter(c => c === cc.color).length
+      }))
+    });
+    
+    // Log overlapping states for future striped pattern implementation
+    if (Object.keys(overlappingData).length > 0) {
+      console.log('States with multiple conditions (future striped pattern):', overlappingData);
+    }
   };
 
   // Expose methods to parent component through ref
