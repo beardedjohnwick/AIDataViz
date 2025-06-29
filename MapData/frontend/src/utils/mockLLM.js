@@ -906,10 +906,48 @@ const parseValueConditionForColor = (conditionText) => {
     dataType = 'land_area';
   }
   
-  // Extract operator and value
-  if (conditionText.includes('over') || conditionText.includes('above') || conditionText.includes('greater than')) {
+  // Handle qualitative terms
+  if (conditionText.includes('high') || conditionText.includes('above average')) {
     operator = 'gt';
-    // Extract numerical value
+    if (dataType === 'crime_rates') {
+      value = 0.1; // 10% crime rate threshold
+      originalValue = 'high';
+    } else if (dataType === 'income') {
+      value = 65000; // $65k income threshold
+      originalValue = 'high';
+    } else if (dataType === 'unemployment') {
+      value = 0.07; // 7% unemployment threshold
+      originalValue = 'high';
+    } else if (dataType === 'population') {
+      value = 15000000; // 15M population threshold
+      originalValue = 'high';
+    } else if (dataType === 'land_area') {
+      value = 100000; // 100k square miles threshold
+      originalValue = 'high';
+    }
+  } else if (conditionText.includes('low') || conditionText.includes('below average')) {
+    operator = 'lt';
+    if (dataType === 'crime_rates') {
+      value = 0.08; // 8% crime rate threshold
+      originalValue = 'low';
+    } else if (dataType === 'income') {
+      value = 60000; // $60k income threshold
+      originalValue = 'low';
+    } else if (dataType === 'unemployment') {
+      value = 0.06; // 6% unemployment threshold
+      originalValue = 'low';
+    } else if (dataType === 'population') {
+      value = 10000000; // 10M population threshold
+      originalValue = 'low';
+    } else if (dataType === 'land_area') {
+      value = 50000; // 50k square miles threshold
+      originalValue = 'low';
+    }
+  }
+  
+  // Handle explicit numerical conditions
+  if (!operator && (conditionText.includes('over') || conditionText.includes('above') || conditionText.includes('greater than'))) {
+    operator = 'gt';
     const numberMatch = conditionText.match(/(\d+(?:\.\d+)?)\s*(million|thousand|k)?/);
     if (numberMatch) {
       let numValue = parseFloat(numberMatch[1]);
@@ -924,9 +962,8 @@ const parseValueConditionForColor = (conditionText) => {
       value = numValue;
       originalValue = numberMatch[0];
     }
-  } else if (conditionText.includes('under') || conditionText.includes('below') || conditionText.includes('less than')) {
+  } else if (!operator && (conditionText.includes('under') || conditionText.includes('below') || conditionText.includes('less than'))) {
     operator = 'lt';
-    // Similar number extraction logic
     const numberMatch = conditionText.match(/(\d+(?:\.\d+)?)\s*(million|thousand|k)?/);
     if (numberMatch) {
       let numValue = parseFloat(numberMatch[1]);

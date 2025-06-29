@@ -1379,33 +1379,6 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     }
   };
 
-  // Function to determine state style based on population data
-  const getStyleForState = (feature) => {
-    // Get the FIPS code from the feature
-    const fipsCode = feature.id || 
-                    (feature.properties && (feature.properties.fips_code || feature.properties.STATEFP));
-    
-    // Check if this state exists in our data
-    if (fipsCode && stateData[fipsCode]) {
-      // Apply highlight style if population is greater than 20 million
-      if (stateData[fipsCode].population > 20000000) {
-        return {
-          color: 'black',
-          weight: 1,
-          fillColor: stateData[fipsCode].color,
-          fillOpacity: 0.7
-        };
-      }
-    }
-    
-    // Default style for states
-    return {
-      color: 'black',
-      weight: 1,
-      fillOpacity: 0
-    };
-  };
-
   // Style function for states using our data-driven function
   const stateStyleFunction = (feature) => {
     // Get the FIPS code from the feature
@@ -1415,6 +1388,30 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     // Check if this state is highlighted
     if (fipsCode && highlightedStates[fipsCode]) {
       const color = highlightedStates[fipsCode];
+      
+      // Map numeric color values back to actual colors
+      const colorMap = {
+        0.9: 'red',
+        0.7: 'blue',
+        0.5: 'green',
+        0.3: 'yellow',
+        0.8: 'orange',
+        0.6: 'purple', // Overlap color
+        0.4: 'pink'
+      };
+      
+      // If the color is a numeric value, map it to the actual color
+      if (typeof color === 'number') {
+        const actualColor = colorMap[color];
+        if (actualColor) {
+          return {
+            color: 'black',
+            weight: 1,
+            fillColor: actualColor,
+            fillOpacity: 0.7
+          };
+        }
+      }
       
       // If the color is a string like 'red', 'blue', etc. use it directly
       if (typeof color === 'string' && !color.startsWith('#')) {
@@ -1426,7 +1423,7 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         };
       }
       
-      // Otherwise, use the color as is (could be a hex value or a numeric value)
+      // Otherwise, use the color as is (could be a hex value)
       return {
         color: 'black',
         weight: 1,
@@ -1459,6 +1456,30 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     if (fipsCode && highlightedCounties[fipsCode]) {
       const color = highlightedCounties[fipsCode];
       
+      // Map numeric color values back to actual colors
+      const colorMap = {
+        0.9: 'red',
+        0.7: 'blue',
+        0.5: 'green',
+        0.3: 'yellow',
+        0.8: 'orange',
+        0.6: 'purple', // Overlap color
+        0.4: 'pink'
+      };
+      
+      // If the color is a numeric value, map it to the actual color
+      if (typeof color === 'number') {
+        const actualColor = colorMap[color];
+        if (actualColor) {
+          return {
+            color: '#444',
+            weight: 0.5,
+            fillColor: actualColor,
+            fillOpacity: 0.7
+          };
+        }
+      }
+      
       // If the color is a string like 'red', 'blue', etc. use it directly
       if (typeof color === 'string' && !color.startsWith('#')) {
         return {
@@ -1469,7 +1490,7 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         };
       }
       
-      // Otherwise, use the color as is (could be a hex value or a numeric value)
+      // Otherwise, use the color as is (could be a hex value)
       return {
         color: '#444',
         weight: 0.5,
@@ -1528,6 +1549,8 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
               adjustedConditionValue = condition.condition.value / 1000000;
             } else if (condition.dataType === 'land_area') {
               adjustedConditionValue = condition.condition.value / 1000; // Convert to thousands
+            } else if (condition.dataType === 'income') {
+              adjustedConditionValue = condition.condition.value / 1000; // Convert to thousands
             }
             
             let meetsCondition = false;
@@ -1564,21 +1587,42 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
             overlappingData[fipsCode] = [coloredData[fipsCode]];
           }
           overlappingData[fipsCode].push(newColor);
-          coloredData[fipsCode] = newColor; // For now, last color wins
         } else {
           coloredData[fipsCode] = newColor;
         }
       });
     }
     
-    // Convert colors to highlight values for the existing highlighting system
-    const highlightData = {};
+    // Create final highlighting data with overlap color
+    const finalHighlightData = {};
+    const OVERLAP_COLOR = 'purple'; // Distinct color for overlapping states
+    
     Object.entries(coloredData).forEach(([fipsCode, color]) => {
-      // Map colors to actual color values
-      highlightData[fipsCode] = color;
+      if (overlappingData[fipsCode]) {
+        // This state has multiple colors - use overlap color
+        finalHighlightData[fipsCode] = OVERLAP_COLOR;
+      } else {
+        // Single color
+        finalHighlightData[fipsCode] = color;
+      }
     });
     
-    // Apply highlighting
+    // Convert colors to highlight values for the existing highlighting system
+    const highlightData = {};
+    Object.entries(finalHighlightData).forEach(([fipsCode, color]) => {
+      const colorMap = {
+        'red': 0.9,
+        'blue': 0.7,
+        'green': 0.5,
+        'yellow': 0.3,
+        'orange': 0.8,
+        'purple': 0.6, // Overlap color
+        'pink': 0.4
+      };
+      highlightData[fipsCode] = colorMap[color] || 0.5;
+    });
+    
+    // Apply highlighting using existing system
     if (targetType === 'state') {
       setHighlightedStates(highlightData);
     } else {
@@ -1588,15 +1632,27 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     console.log('Multi-color highlight results:', {
       totalHighlighted: Object.keys(coloredData).length,
       overlapping: Object.keys(overlappingData).length,
-      colorBreakdown: coloredConditions.map(cc => ({
-        color: cc.color,
-        count: Object.values(coloredData).filter(c => c === cc.color).length
-      }))
+      overlapStates: Object.keys(overlappingData),
+      colorBreakdown: {
+        ...coloredConditions.map(cc => ({
+          color: cc.color,
+          count: Object.values(finalHighlightData).filter(c => c === cc.color).length
+        })),
+        overlap: {
+          color: OVERLAP_COLOR,
+          count: Object.keys(overlappingData).length
+        }
+      }
     });
     
-    // Log overlapping states for future striped pattern implementation
+    // Log detailed overlap information
     if (Object.keys(overlappingData).length > 0) {
-      console.log('States with multiple conditions (future striped pattern):', overlappingData);
+      console.log('Overlapping states (shown in purple):', overlappingData);
+      Object.entries(overlappingData).forEach(([fipsCode, colors]) => {
+        console.log(`State ${fipsCode}: meets conditions for ${colors.join(' + ')} → displayed as ${OVERLAP_COLOR}`);
+      });
+    } else {
+      console.log('No overlapping states found');
     }
   };
 
