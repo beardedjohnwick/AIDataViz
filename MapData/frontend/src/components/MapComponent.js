@@ -473,13 +473,20 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
 
   // Function to apply multi-condition filters
   const applyMultiFilter = (targetType, conditions, operator = 'and') => {
-    console.log(`Applying multi-filter: ${targetType} with ${conditions.length} conditions, operator: ${operator}`);
-    console.log('Conditions:', conditions);
-    
     const filteredData = {};
     
+    console.log('Applying multi-filter with operator:', operator);
+    console.log('Conditions:', conditions);
+    
+    // Separate inclusion and exclusion conditions
+    const inclusionConditions = conditions.filter(c => !c.exclude);
+    const exclusionConditions = conditions.filter(c => c.exclude);
+    
+    console.log('Inclusion conditions:', inclusionConditions.length);
+    console.log('Exclusion conditions:', exclusionConditions.length);
+    
     // Get all possible FIPS codes from the first condition's data
-    const firstCondition = conditions[0];
+    const firstCondition = inclusionConditions[0] || conditions[0];
     const firstDataSet = firstCondition.type === 'trend' 
       ? mockHistoricalData[firstCondition.dataType] 
       : mockDataSets[firstCondition.dataType];
@@ -499,105 +506,156 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         return;
       }
       
-      let meetsConditions = false;
-      const conditionResults = [];
+      let meetsInclusionConditions = false;
+      let meetsExclusionConditions = false;
       
-      for (const condition of conditions) {
-        let meetsThisCondition = false;
+      // Evaluate inclusion conditions
+      if (inclusionConditions.length > 0) {
+        const inclusionResults = [];
         
-        if (condition.type === 'trend') {
-          const historicalData = mockHistoricalData[condition.dataType];
-          if (historicalData && historicalData[fipsCode]) {
-            meetsThisCondition = analyzeTimeTrend(
-              historicalData[fipsCode], 
-              condition.trend, 
-              condition.timePeriod
-            );
+        for (const condition of inclusionConditions) {
+          let meetsThisCondition = false;
+          
+          if (condition.type === 'trend') {
+            const historicalData = mockHistoricalData[condition.dataType];
+            if (historicalData && historicalData[fipsCode]) {
+              meetsThisCondition = analyzeTimeTrend(
+                historicalData[fipsCode], 
+                condition.trend, 
+                condition.timePeriod
+              );
+            }
+          } else if (condition.type === 'value') {
+            const data = mockDataSets[condition.dataType];
+            if (data && data[fipsCode] !== undefined) {
+              const value = data[fipsCode];
+              let adjustedConditionValue = condition.condition.value;
+              
+              // Apply data type-specific adjustments
+              if (condition.dataType === 'population') {
+                adjustedConditionValue = condition.condition.value / 1000000;
+              } else if (condition.dataType === 'income') {
+                adjustedConditionValue = condition.condition.value / 1000;
+              } else if (condition.dataType === 'land_area') {
+                adjustedConditionValue = condition.condition.value / 1000;
+              }
+              
+              switch (condition.condition.operator) {
+                case 'gt':
+                  meetsThisCondition = value > adjustedConditionValue;
+                  break;
+                case 'lt':
+                  meetsThisCondition = value < adjustedConditionValue;
+                  break;
+                case 'eq':
+                  meetsThisCondition = value === adjustedConditionValue;
+                  break;
+                case 'gte':
+                  meetsThisCondition = value >= adjustedConditionValue;
+                  break;
+                case 'lte':
+                  meetsThisCondition = value <= adjustedConditionValue;
+                  break;
+              }
+            }
           }
-        } else if (condition.type === 'value') {
-          // Handle regular value-based conditions
-          const data = mockDataSets[condition.dataType];
-          if (data && data[fipsCode] !== undefined) {
-            const value = data[fipsCode];
-            let adjustedConditionValue = condition.condition.value;
-            
-            // Apply data type-specific adjustments
-            if (condition.dataType === 'population') {
-              adjustedConditionValue = condition.condition.value / 1000000;
-            } else if (condition.dataType === 'income') {
-              // Income data is stored in thousands, but user input is in raw dollars
-              adjustedConditionValue = condition.condition.value / 1000;
-            }
-            
-            switch (condition.condition.operator) {
-              case 'gt':
-                meetsThisCondition = value > adjustedConditionValue;
-                break;
-              case 'lt':
-                meetsThisCondition = value < adjustedConditionValue;
-                break;
-              case 'eq':
-                meetsThisCondition = value === adjustedConditionValue;
-                break;
-              case 'gte':
-                meetsThisCondition = value >= adjustedConditionValue;
-                break;
-              case 'lte':
-                meetsThisCondition = value <= adjustedConditionValue;
-                break;
-              default:
-                console.warn('Unknown operator:', condition.condition.operator);
-            }
-            
-            // Add debug logging for value conditions
-            console.log('Value condition debug:', {
-              fipsCode,
-              dataType: condition.dataType,
-              originalValue: condition.condition.value,
-              adjustedValue: adjustedConditionValue,
-              mockDataValue: value,
-              operator: condition.condition.operator,
-              meetsCondition: meetsThisCondition
-            });
+          
+          inclusionResults.push(meetsThisCondition);
+          
+          // For OR logic, if any inclusion condition is met, we can break early
+          if (operator === 'or' && meetsThisCondition) {
+            meetsInclusionConditions = true;
+            break;
           }
         }
         
-        conditionResults.push(meetsThisCondition);
-        
-        // For OR logic, if any condition is met, we can break early
-        if (operator === 'or' && meetsThisCondition) {
-          meetsConditions = true;
-          break;
+        // For AND logic, all inclusion conditions must be met
+        if (operator === 'and' || operator === 'and_not') {
+          meetsInclusionConditions = inclusionResults.every(result => result === true);
         }
+        // For OR logic, at least one inclusion condition must be met (handled above)
+      } else {
+        // No inclusion conditions means we start with all items
+        meetsInclusionConditions = true;
       }
       
-      // For AND logic, all conditions must be met
-      if (operator === 'and') {
-        meetsConditions = conditionResults.every(result => result === true);
+      // Evaluate exclusion conditions
+      if (exclusionConditions.length > 0) {
+        const exclusionResults = [];
+        
+        for (const condition of exclusionConditions) {
+          let meetsThisCondition = false;
+          
+          if (condition.type === 'trend') {
+            const historicalData = mockHistoricalData[condition.dataType];
+            if (historicalData && historicalData[fipsCode]) {
+              meetsThisCondition = analyzeTimeTrend(
+                historicalData[fipsCode], 
+                condition.trend, 
+                condition.timePeriod
+              );
+            }
+          } else if (condition.type === 'value') {
+            const data = mockDataSets[condition.dataType];
+            if (data && data[fipsCode] !== undefined) {
+              const value = data[fipsCode];
+              let adjustedConditionValue = condition.condition.value;
+              
+              // Apply data type-specific adjustments
+              if (condition.dataType === 'population') {
+                adjustedConditionValue = condition.condition.value / 1000000;
+              } else if (condition.dataType === 'income') {
+                adjustedConditionValue = condition.condition.value / 1000;
+              } else if (condition.dataType === 'land_area') {
+                adjustedConditionValue = condition.condition.value / 1000;
+              }
+              
+              switch (condition.condition.operator) {
+                case 'gt':
+                  meetsThisCondition = value > adjustedConditionValue;
+                  break;
+                case 'lt':
+                  meetsThisCondition = value < adjustedConditionValue;
+                  break;
+                case 'eq':
+                  meetsThisCondition = value === adjustedConditionValue;
+                  break;
+                case 'gte':
+                  meetsThisCondition = value >= adjustedConditionValue;
+                  break;
+                case 'lte':
+                  meetsThisCondition = value <= adjustedConditionValue;
+                  break;
+              }
+            }
+          }
+          
+          exclusionResults.push(meetsThisCondition);
+        }
+        
+        // For exclusion, if ANY exclusion condition is met, the item should be excluded
+        meetsExclusionConditions = exclusionResults.some(result => result === true);
       }
-      // For OR logic, at least one condition must be met (handled above)
       
-      if (meetsConditions) {
-        filteredData[fipsCode] = '#3388ff'; // Highlight color (blue)
+      // Final decision: include if meets inclusion conditions AND does not meet exclusion conditions
+      const shouldInclude = meetsInclusionConditions && !meetsExclusionConditions;
+      
+      if (shouldInclude) {
+        filteredData[fipsCode] = 1; // Highlight color
       }
     });
     
-    // Apply highlighting to filtered results
+    // Apply highlighting
     if (targetType === 'state') {
       setHighlightedStates(filteredData);
-      if (Object.keys(filteredData).length === 0) {
-        console.warn("No states match the specified conditions");
-      }
     } else {
       setHighlightedCounties(filteredData);
-      if (Object.keys(filteredData).length === 0) {
-        console.warn("No counties match the specified conditions");
-      }
     }
     
     console.log('Multi-filter results:', {
       operator,
-      conditions: conditions.length,
+      inclusionConditions: inclusionConditions.length,
+      exclusionConditions: exclusionConditions.length,
       matchCount: Object.keys(filteredData).length,
       matches: Object.keys(filteredData)
     });

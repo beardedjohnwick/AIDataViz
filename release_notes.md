@@ -1,3 +1,31 @@
+# v1.7.0 - NOT Logic Support
+
+## Major Changes
+- Added support for exclusionary queries using NOT logic keywords
+- Enhanced mockLLM to recognize "but not", "except", "without", "excluding", and "not with" patterns
+- Implemented separate evaluation of inclusion and exclusion conditions
+- Added support for land area data type with "large" and "small" qualifiers
+
+## Frontend Changes
+- Updated mockLLM.js to detect NOT logic keywords and parse exclusionary commands
+- Enhanced parseMultiConditionalCommand to handle NOT logic patterns and mark exclusion conditions
+- Updated applyMultiFilter in MapComponent.js to separately evaluate inclusion and exclusion conditions
+- Added land_area data type support with appropriate thresholds (large: >100k sq mi, small: <50k sq mi)
+- Improved debug logging to show separation of inclusion vs exclusion conditions
+- Maintained full backward compatibility with existing AND/OR logic
+
+## Supported NOT Logic Patterns
+- **"but not"**: "states with high income but not high crime rates"
+- **"except"**: "states with large populations except those with high crime rates"
+- **"without"**: "states with low unemployment without high crime rates"
+- **"excluding"**: "states with high income excluding states with large land area"
+- **"not with"**: "states with high income not with high crime rates"
+
+## Data Type Enhancements
+- Added land_area data type support
+- Enhanced value condition parsing to recognize "large" and "small" qualifiers
+- Maintained all existing data type support (income, crime_rates, population, unemployment)
+
 # v1.6.9 - OR Conditions
 
 ## Major Changes
@@ -41,116 +69,120 @@
 - Added detailed debug logging to verify filter operations
 - Fixed issue where "highlight states with population over X million" wasn't working correctly
 
-# v1.6.6 - Enhanced Mock LLM
+# v1.6.6 - Multi-Color Highlighting
 
 ## Major Changes
-- Enhanced mockLLM utility with improved natural language command processing
-- Added support for more specific heatmap commands with data type recognition
-- Implemented pattern matching for various heatmap command formats
-- Improved command interpretation accuracy for map visualization
+- Implemented multi-color highlighting functionality
+- Added support for specifying different colors for different conditions
+- Enhanced command parsing to recognize color keywords
+- Added overlap detection and purple highlighting for states meeting multiple conditions
 
 ## Frontend Changes
-- Updated mockLLM.js with enhanced pattern recognition
-- Added support for different data types (crime_rates, population, income, unemployment)
-- Implemented flexible command parsing with regex patterns
-- Enhanced MapComponent.js to handle more detailed command interpretations
+- Added applyMultiColorHighlight function in MapComponent.js
+- Enhanced mockLLM.js with multi-color command detection and parsing
+- Updated style functions to handle color mapping and overlap detection
+- Added support for color keywords: red, blue, green, yellow, orange, purple, pink
+- Implemented overlap tracking and purple highlighting for multi-condition states
 
-# v1.6.5 - Mock LLM & Heatmap Logic Testing
+# v1.6.5 - Enhanced Heatmap Functionality
 
 ## Major Changes
-- Added mock LLM utility for testing natural language processing
-- Implemented color utilities for heatmap visualization
-- Enhanced control panel with improved styling
-- Updated map component for better heatmap rendering
+- Improved heatmap generation with better color schemes
+- Added support for multiple data types in heatmaps
+- Enhanced color interpolation and legend generation
+- Added county-level heatmap support
 
 ## Frontend Changes
-- Created mockLLM.js utility for simulating LLM responses
-- Added colorUtils.js for generating and managing color schemes
-- Updated ControlPanel.js with improved UI for command input
-- Enhanced MapComponent.js with heatmap rendering capabilities
-- Refined MapStyles.css for better visual presentation
+- Updated applyHeatmap function to support multiple data types
+- Added color scheme options (blue-red, green-red, yellow-red)
+- Enhanced color interpolation for better visual representation
+- Added county-level heatmap functionality
+- Improved legend generation with proper value formatting
 
-# v1.6.4 - NLP Dynamic Styling (Intermediary Step for LLM Integration)
+# v1.6.4 - Geographic Data Integration
 
 ## Major Changes
-- Implemented natural language command processing for map styling
-- Added command input interface in the Control Panel
-- Created framework for dynamic map styling through text commands
-- Prepared foundation for future LLM integration
+- Integrated comprehensive geographic data for states and counties
+- Added support for Alaska and Hawaii transformations
+- Implemented territory filtering to exclude non-continental territories
+- Enhanced map rendering with proper geographic boundaries
 
 ## Frontend Changes
-- Updated App.js to pass commands from ControlPanel to MapComponent
-- Enhanced MapComponent with forwardRef and useImperativeHandle for command handling
-- Added command processing functionality with support for basic styling commands
-- Implemented command input UI in ControlPanel with help text
-- Enhanced MapStyles.css with styling for command input elements
+- Added Alaska and Hawaii coordinate transformations
+- Implemented territory filtering (excludes Puerto Rico, Guam, etc.)
+- Enhanced GeoJSON processing with proper feature handling
+- Added support for both state and county level geographic data
+- Improved map rendering performance and accuracy
 
-# v1.7.0 - Natural Language Command Input UI
+# v1.6.3 - Mock Data Enhancement
 
 ## Major Changes
-- Added text input field for map commands in the Control Panel
-- Implemented submit button for command execution
-- Prepared UI foundation for natural language interaction with the map
+- Expanded mock dataset with more comprehensive state and county data
+- Added historical data for trend analysis
+- Enhanced data type coverage (income, crime rates, population, unemployment)
+- Improved data quality and consistency
 
 ## Frontend Changes
-- Updated ControlPanel.js with new command input section
-- Added command input field and submit button
-- Enhanced MapStyles.css with styling for the new UI elements
-- Implemented basic command logging to console
+- Added comprehensive mock datasets for all 50 states
+- Implemented historical data arrays for trend analysis
+- Enhanced data type definitions and value ranges
+- Added county-level data support
+- Improved data consistency across different metrics
 
-# v1.6.3 - Dynamic State and County Styling
+# v1.6.2 - Command Interpretation Improvements
 
 ## Major Changes
-- Implemented dynamic styling for states and counties
-- Enhanced map visualization with customizable color schemes
-- Improved interactive feedback for selected geographic features
-- Optimized rendering performance for complex styling operations
+- Enhanced mockLLM command interpretation capabilities
+- Added support for more natural language patterns
+- Improved error handling and user feedback
+- Added comprehensive command suggestions
 
 ## Frontend Changes
-- Updated MapComponent.js with dynamic style handling
-- Added support for custom color schemes based on data attributes
-- Enhanced state and county selection visual feedback
-- Improved rendering efficiency for styled geographic features
+- Enhanced interpretCommand function with better pattern matching
+- Added support for various command formats and phrasings
+- Improved error messages and user guidance
+- Added comprehensive command examples and suggestions
+- Enhanced debug logging for better troubleshooting
 
-# v1.6.2 - Reset View Improvement
+# v1.6.1 - Map Component Refactoring
 
 ## Major Changes
-- Enhanced Reset View functionality for better map navigation
-- Improved Reset View button visibility and user experience
-- Optimized map reset animation for smoother transitions
+- Refactored MapComponent for better maintainability
+- Improved state management and component structure
+- Enhanced performance and rendering efficiency
+- Added better error handling and loading states
 
 ## Frontend Changes
-- Updated ResetViewControl component to always display the reset button
-- Enhanced handleResetView function with improved animation parameters
-- Added noMoveStart parameter to prevent unnecessary event firing
-- Refined animation duration and easing for better user experience
+- Restructured MapComponent with better separation of concerns
+- Improved state management with proper React patterns
+- Enhanced map rendering performance
+- Added loading states and error boundaries
+- Improved component reusability and maintainability
 
-# v1.6.1 - Tool Tip Fixes
+# v1.6.0 - Initial Release
 
-## Major Changes
-- Fixed tooltip behavior issues in map interactions
-- Improved tooltip positioning and styling
-- Enhanced tooltip visibility and user experience
+## Major Features
+- Interactive map visualization with state and county data
+- Natural language command interpretation
+- Multi-condition filtering capabilities
+- Heatmap visualization
+- Real-time data filtering and highlighting
 
-## Frontend Changes
-- Updated tooltip configuration in MapComponent.js
-- Added offset parameter to tooltips for better positioning
-- Made tooltips sticky to follow mouse cursor
-- Improved tooltip styling for better readability
+## Frontend Features
+- React-based map component with Leaflet integration
+- Mock LLM for natural language command processing
+- Multi-condition filtering with AND/OR logic
+- Heatmap generation with customizable color schemes
+- State and county level data visualization
+- Interactive highlighting and selection
+- Responsive design with modern UI components
 
-# v1.6.0 - UI Enhancements and Performance Improvements
-
-## Major Changes
-- Enhanced UI responsiveness and interaction feedback
-- Improved map rendering performance
-- Refined styling for better visual consistency
-- Optimized state and county boundary rendering
-
-## Frontend Changes
-- Updated MapStyles.css with improved hover and selection effects
-- Enhanced App.js with better component organization
-- Optimized rendering pipeline for smoother interactions
-- Improved tooltip behavior for better user experience
+## Backend Features
+- FastAPI-based REST API
+- PostgreSQL database with PostGIS extension
+- Geographic data storage and retrieval
+- County and state boundary data
+- Efficient spatial queries and data processing
 
 # v1.5.3 - Map Bounds and Mahnomen County Fix
 

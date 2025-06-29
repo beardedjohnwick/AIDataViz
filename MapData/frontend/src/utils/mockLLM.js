@@ -208,6 +208,16 @@ const hasTrendKeywords = (command) => {
 };
 
 /**
+ * Checks if a command contains NOT logic keywords
+ * @param {string} command - The command to check
+ * @returns {boolean} True if the command contains NOT logic keywords
+ */
+const hasNotLogic = (command) => {
+  const notKeywords = ['but not', 'except', 'without', 'not with', 'excluding'];
+  return notKeywords.some(keyword => command.includes(keyword));
+};
+
+/**
  * Parses a multi-conditional command
  * @param {string} command - The command to parse
  * @returns {Object} A structured action object
@@ -217,24 +227,50 @@ const parseMultiConditionalCommand = (command) => {
   
   let operator = 'and'; // default
   let parts = [];
+  let hasExclusion = false;
   
-  // Determine the operator and split accordingly
-  if (command.includes(' and ') && command.includes(' or ')) {
-    // Handle mixed operators - for now, prioritize the first one found
-    if (command.indexOf(' and ') < command.indexOf(' or ')) {
+  // Check for NOT logic first
+  if (hasNotLogic(command)) {
+    hasExclusion = true;
+    
+    // Handle different NOT patterns
+    if (command.includes('but not')) {
+      parts = command.split(' but not ');
+      operator = 'and_not';
+    } else if (command.includes('except')) {
+      parts = command.split(' except ');
+      operator = 'and_not';
+    } else if (command.includes('without')) {
+      parts = command.split(' without ');
+      operator = 'and_not';
+    } else if (command.includes('excluding')) {
+      parts = command.split(' excluding ');
+      operator = 'and_not';
+    } else if (command.includes('not with')) {
+      parts = command.split(' not with ');
+      operator = 'and_not';
+    }
+    
+    console.log('NOT logic detected:', { operator, parts });
+  } else {
+    // Handle regular AND/OR logic
+    if (command.includes(' and ') && command.includes(' or ')) {
+      // Handle mixed operators - prioritize the first one found
+      if (command.indexOf(' and ') < command.indexOf(' or ')) {
+        operator = 'and';
+        parts = command.split(' and ');
+      } else {
+        operator = 'or';
+        parts = command.split(' or ');
+      }
+      console.log('Mixed operators detected, using:', operator);
+    } else if (command.includes(' and ')) {
       operator = 'and';
       parts = command.split(' and ');
-    } else {
+    } else if (command.includes(' or ')) {
       operator = 'or';
       parts = command.split(' or ');
     }
-    console.log('Mixed operators detected, using:', operator);
-  } else if (command.includes(' and ')) {
-    operator = 'and';
-    parts = command.split(' and ');
-  } else if (command.includes(' or ')) {
-    operator = 'or';
-    parts = command.split(' or ');
   }
   
   if (parts.length < 2) {
@@ -255,9 +291,14 @@ const parseMultiConditionalCommand = (command) => {
   }
   
   // Parse each condition
-  for (const part of parts) {
-    const condition = parseIndividualCondition(part.trim());
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i].trim();
+    const condition = parseIndividualCondition(part);
     if (condition) {
+      // Mark exclusion conditions
+      if (hasExclusion && i > 0) {
+        condition.exclude = true;
+      }
       conditions.push(condition);
     }
   }
@@ -314,10 +355,12 @@ const parseValueCondition = (conditionText) => {
     dataType = 'population';
   } else if (conditionText.includes('unemployment')) {
     dataType = 'unemployment';
+  } else if (conditionText.includes('land area') || conditionText.includes('land_area')) {
+    dataType = 'land_area';
   }
   
   // Extract operator and value
-  if (conditionText.includes('high') || conditionText.includes('above average')) {
+  if (conditionText.includes('high') || conditionText.includes('above average') || conditionText.includes('large')) {
     // For "high crime rates" or "high income", use a reasonable threshold
     operator = 'gt';
     if (dataType === 'crime_rates') {
@@ -332,8 +375,11 @@ const parseValueCondition = (conditionText) => {
     } else if (dataType === 'population') {
       value = 15000000; // 15M population threshold
       originalValue = 'high';
+    } else if (dataType === 'land_area') {
+      value = 100000; // 100k square miles threshold
+      originalValue = 'large';
     }
-  } else if (conditionText.includes('low') || conditionText.includes('below average')) {
+  } else if (conditionText.includes('low') || conditionText.includes('below average') || conditionText.includes('small')) {
     // For "low income" or "low crime rates"
     operator = 'lt';
     if (dataType === 'crime_rates') {
@@ -348,6 +394,9 @@ const parseValueCondition = (conditionText) => {
     } else if (dataType === 'population') {
       value = 10000000; // 10M population threshold
       originalValue = 'low';
+    } else if (dataType === 'land_area') {
+      value = 50000; // 50k square miles threshold
+      originalValue = 'small';
     }
   }
   
@@ -468,11 +517,17 @@ export function interpretCommand(commandText) {
   console.log('Normalized command:', command);
   console.log('Contains "and":', command.includes(' and '));
   console.log('Contains "or":', command.includes(' or '));
+  console.log('Has NOT logic:', hasNotLogic(command));
   console.log('Has trend keywords:', hasTrendKeywords(command));
   
-  // Check for multi-color highlighting commands
+  // Check for multi-color highlighting commands first
   if (isMultiColorCommand(command)) {
     return parseMultiColorCommand(command);
+  }
+  
+  // Check for multi-conditional commands (including NOT logic)
+  if (command.includes(' and ') || command.includes(' or ') || hasNotLogic(command)) {
+    return parseMultiConditionalCommand(command);
   }
   
   // Check for highlight California red command
@@ -498,11 +553,6 @@ export function interpretCommand(commandText) {
     return {
       action: 'clearHighlights'
     };
-  }
-  
-  // Check for multi-conditional commands first (before single conditions)
-  if (command.includes(' and ') || command.includes(' or ')) {
-    return parseMultiConditionalCommand(command);
   }
   
   // Check for time-series trend commands
@@ -902,12 +952,12 @@ const parseValueConditionForColor = (conditionText) => {
     dataType = 'income';
   } else if (conditionText.includes('unemployment')) {
     dataType = 'unemployment';
-  } else if (conditionText.includes('land area') || conditionText.includes('area')) {
+  } else if (conditionText.includes('land area') || conditionText.includes('land_area')) {
     dataType = 'land_area';
   }
   
   // Handle qualitative terms
-  if (conditionText.includes('high') || conditionText.includes('above average')) {
+  if (conditionText.includes('high') || conditionText.includes('above average') || conditionText.includes('large')) {
     operator = 'gt';
     if (dataType === 'crime_rates') {
       value = 0.1; // 10% crime rate threshold
@@ -923,9 +973,9 @@ const parseValueConditionForColor = (conditionText) => {
       originalValue = 'high';
     } else if (dataType === 'land_area') {
       value = 100000; // 100k square miles threshold
-      originalValue = 'high';
+      originalValue = 'large';
     }
-  } else if (conditionText.includes('low') || conditionText.includes('below average')) {
+  } else if (conditionText.includes('low') || conditionText.includes('below average') || conditionText.includes('small')) {
     operator = 'lt';
     if (dataType === 'crime_rates') {
       value = 0.08; // 8% crime rate threshold
@@ -941,7 +991,7 @@ const parseValueConditionForColor = (conditionText) => {
       originalValue = 'low';
     } else if (dataType === 'land_area') {
       value = 50000; // 50k square miles threshold
-      originalValue = 'low';
+      originalValue = 'small';
     }
   }
   
