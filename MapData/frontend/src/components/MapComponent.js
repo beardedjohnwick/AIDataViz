@@ -20,6 +20,8 @@ import {
 import { interpretCommand } from '../utils/mockLLM';
 import { getHeatmapColor, generateHeatmapLegend } from '../utils/colorUtils';
 import { testStatisticsLibrary } from '../utils/statisticsUtils';
+import { testAnalyticalRegistry, analyticalFunctionRegistry } from '../utils/analyticalFunctionRegistry';
+import { testAnalyticalCommandParsing } from '../utils/mockLLM';
 
 // Component to handle zooming to a feature when clicked
 const ZoomToFeature = ({ featureRef, triggerZoom }) => {
@@ -2262,6 +2264,36 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
     
     console.log('✅ Cleared all highlights');
   };
+
+  // Test function for analytical registry integration
+  const testRegistryIntegration = () => {
+    console.log('Testing analytical function registry...');
+    const success = testAnalyticalRegistry();
+    if (success) {
+      console.log('Analytical function registry is ready for use!');
+      console.log('Total functions available:', Object.keys(analyticalFunctionRegistry).length);
+    } else {
+      console.error('Analytical function registry test failed!');
+    }
+  };
+
+  // Test function for analytical command parsing
+  const testAnalyticalParsing = () => {
+    console.log('Testing analytical command parsing...');
+    testAnalyticalCommandParsing();
+  };
+
+  // Test statistics integration on component mount (temporary for verification)
+  useEffect(() => {
+    // Test statistics integration on component mount
+    testStatsIntegration();
+    
+    // Test registry integration
+    testRegistryIntegration();
+    
+    // Test analytical command parsing
+    testAnalyticalParsing();
+  }, []);
 
   return (
     <>
