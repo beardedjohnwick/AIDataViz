@@ -639,11 +639,17 @@ export function interpretCommand(commandText) {
   console.log('=== Mock LLM Debug ===');
   console.log('Input command:', commandText);
   console.log('Normalized command:', command);
+  console.log('Is ambiguous:', isAmbiguousQuery(command));
   console.log('Is ranking command:', isRankingCommand(command));
   console.log('Contains "and":', command.includes(' and '));
   console.log('Contains "or":', command.includes(' or '));
   console.log('Has NOT logic:', hasNotLogic(command));
   console.log('Has trend keywords:', hasTrendKeywords(command));
+  
+  // Check for ambiguous queries first
+  if (isAmbiguousQuery(command)) {
+    return handleAmbiguousQuery(command);
+  }
   
   // Check for multi-color highlighting commands first
   if (isMultiColorCommand(command)) {
@@ -1173,5 +1179,161 @@ const parseValueConditionForColor = (conditionText) => {
       value: value,
       originalValue: originalValue
     }
+  };
+};
+
+/**
+ * Helper function to detect ambiguous queries
+ * @param {string} command - The command to check for ambiguity
+ * @returns {boolean} True if the command is ambiguous
+ */
+const isAmbiguousQuery = (command) => {
+  const ambiguousPatterns = [
+    // Vague qualitative terms without context
+    /\b(good|bad|best|worst)\s+(states|counties)\b/,
+    /\b(show|find|get)\s+(states|counties)\b$/,
+    /\b(data|information|stats)\s+(for|about)\s+(states|counties)\b/,
+    
+    // Missing data type
+    /\b(high|low|highest|lowest)\s+(states|counties)\b$/,
+    /\b(top|bottom)\s+\d*\s*(states|counties)\b$/,
+    /\b(show|find|get)\s+(states|counties)\s+with\s+(high|low|highest|lowest)\b$/,
+    
+    // Incomplete comparisons
+    /\b(better|worse|more|less)\s+(than|states|counties)\b/,
+    /\b(compare|comparison)\b/,
+    
+    // Generic requests
+    /\b(help|what|how)\b/,
+    /\b(show me|tell me|give me)\s+(something|anything)\b/,
+    /\b(tell me|show me)\s+(about|information|data)\s+(states|counties)\b/
+  ];
+  
+  return ambiguousPatterns.some(pattern => pattern.test(command));
+};
+
+/**
+ * Helper function to categorize ambiguous queries
+ * @param {string} command - The command to categorize
+ * @returns {string} The category of ambiguity
+ */
+const categorizeAmbiguousQuery = (command) => {
+  if (/\b(good|bad|best|worst)\s+(states|counties)\b/.test(command)) {
+    return 'vague_qualitative';
+  } else if (/\b(high|low|highest|lowest)\s+(states|counties)\b$/.test(command) || 
+             /\b(show|find|get)\s+(states|counties)\s+with\s+(high|low|highest|lowest)\b$/.test(command)) {
+    return 'missing_data_type';
+  } else if (/\b(top|bottom)\s+\d*\s*(states|counties)\b$/.test(command)) {
+    return 'incomplete_ranking';
+  } else if (/\b(compare|comparison)\b/.test(command)) {
+    return 'comparison_request';
+  } else if (/\b(help|what|how)\b/.test(command)) {
+    return 'help_request';
+  } else if (/\b(tell me|show me)\s+(about|information|data)\s+(states|counties)\b/.test(command)) {
+    return 'general_ambiguous';
+  } else {
+    return 'general_ambiguous';
+  }
+};
+
+/**
+ * Get available data types for help messages
+ * @returns {Object} Object describing available data types
+ */
+const getAvailableDataTypes = () => {
+  return {
+    population: 'Population data (in millions)',
+    crime_rates: 'Crime rates (as percentages)',
+    income: 'Income data (in thousands of dollars)',
+    unemployment: 'Unemployment rates (as percentages)',
+    land_area: 'Land area (in thousands of square miles)'
+  };
+};
+
+/**
+ * Handle ambiguous queries by generating helpful clarification responses
+ * @param {string} command - The ambiguous command
+ * @returns {Object} Clarification response object
+ */
+const handleAmbiguousQuery = (command) => {
+  console.log('Handling ambiguous query:', command);
+  
+  const category = categorizeAmbiguousQuery(command);
+  let clarificationMessage = '';
+  let suggestions = [];
+  
+  switch (category) {
+    case 'vague_qualitative':
+      clarificationMessage = "I'd be happy to help you find states! What makes a state 'good' or 'best' for you?";
+      suggestions = [
+        'Show states with high income',
+        'Find states with low crime rates',
+        'Highlight states with low unemployment',
+        'Show states with large populations',
+        'Find states with small land area'
+      ];
+      break;
+      
+    case 'missing_data_type':
+      clarificationMessage = "I can show you states with high or low values. Which data would you like to see?";
+      suggestions = [
+        'Show states with high population',
+        'Find states with low crime rates',
+        'Highlight states with high income',
+        'Show states with low unemployment',
+        'Find states with large land area'
+      ];
+      break;
+      
+    case 'incomplete_ranking':
+      clarificationMessage = "I can show you top or bottom states by different metrics. What would you like to rank by?";
+      suggestions = [
+        'Show top 5 states by population',
+        'Find bottom 3 states by crime rates',
+        'Show top 10 states by income',
+        'Find states with lowest unemployment',
+        'Show largest states by land area'
+      ];
+      break;
+      
+    case 'comparison_request':
+      clarificationMessage = "I can help you compare states! What would you like to compare?";
+      suggestions = [
+        'Show states with high income and low crime rates',
+        'Find states with large populations but small land area',
+        'Compare states with high income vs high crime rates',
+        'Show states with low unemployment and high income'
+      ];
+      break;
+      
+    case 'help_request':
+      clarificationMessage = "I can help you explore US state data! Here are some things you can ask:";
+      suggestions = [
+        'Show heatmap of population',
+        'Find states with high income',
+        'Show top 5 states by land area',
+        'Highlight states with low crime rates in red',
+        'Show states with high income but not high crime rates'
+      ];
+      break;
+      
+    default:
+      clarificationMessage = "I'm not sure exactly what you're looking for. Here are some examples of what I can do:";
+      suggestions = [
+        'Show heatmap of crime rates',
+        'Find states with population over 20 million',
+        'Show top 5 states with highest income in blue',
+        'Highlight states with low unemployment',
+        'Show states with high income and low crime rates'
+      ];
+  }
+  
+  console.log('Generated clarification:', { category, clarificationMessage, suggestions });
+  
+  return {
+    action: 'clarify',
+    message: clarificationMessage,
+    suggestions: suggestions,
+    category: category
   };
 }; 

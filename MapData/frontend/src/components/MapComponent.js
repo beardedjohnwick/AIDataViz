@@ -1591,6 +1591,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         // Handle the new ranking action
         applyRanking(result.targetType, result.dataType, result.count, result.direction, result.color);
         break;
+      case 'clarify':
+        // Handle clarification requests
+        handleClarification(result);
+        break;
       case 'unknown':
       default:
         console.warn("Unknown command:", commandString);
@@ -1600,6 +1604,35 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         }
         break;
     }
+  };
+
+  /**
+   * Handle clarification responses from the mock LLM
+   * @param {Object} clarificationData - The clarification data from the LLM
+   */
+  const handleClarification = (clarificationData) => {
+    console.log('Displaying clarification:', clarificationData);
+    
+    // Clear any existing highlights
+    setHighlightedStates({});
+    setHighlightedCounties({});
+    
+    // Display clarification message and suggestions
+    // This could be implemented as a modal, alert, or console message
+    // For now, we'll use console output with clear formatting
+    
+    console.log('\n=== CLARIFICATION NEEDED ===');
+    console.log('Message:', clarificationData.message);
+    console.log('\nSuggested commands:');
+    clarificationData.suggestions.forEach((suggestion, index) => {
+      console.log(`${index + 1}. "${suggestion}"`);
+    });
+    console.log('\nTry typing one of these commands, or be more specific about what you\'re looking for.');
+    console.log('============================\n');
+    
+    // Optional: You could also display this in the UI
+    // For example, update a state variable to show clarification in a component
+    // setClarificationData(clarificationData);
   };
 
   // Style function for states using our data-driven function
