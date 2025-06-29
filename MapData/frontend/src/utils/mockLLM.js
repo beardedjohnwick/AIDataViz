@@ -995,7 +995,13 @@ export function interpretCommand(commandText) {
   console.log('Input command:', commandText);
   console.log('Normalized command:', command);
   
-  // Check for analytical filter commands FIRST
+  // Check for advanced multi-condition analytical commands FIRST
+  if (isMultiConditionAnalyticalCommand(command)) {
+    console.log('🔬 Detected advanced analytical command');
+    return parseAdvancedAnalyticalCommand(command);
+  }
+  
+  // Check for analytical filter commands SECOND
   if (isAnalyticalFilterCommand(command)) {
     console.log('🔬 Detected analytical filter command');
     return parseAnalyticalFilterCommand(command);
@@ -2036,3 +2042,242 @@ export const testAnalyticalCommandParsing = () => {
   
   console.log('\n✅ Analytical command parsing test completed!');
 };
+
+// Add this function to detect multi-condition analytical commands
+function isMultiConditionAnalyticalCommand(command) {
+  const multiConditionPatterns = [
+    // AND logic patterns
+    /(?:highlight|show|find).*where.*(?:and|&)/i,
+    
+    // OR logic patterns  
+    /(?:highlight|show|find).*where.*(?:or|\|)/i,
+    
+    // Comparison patterns (stronger than, better than, etc.)
+    /(?:stronger|weaker|better|worse|higher|lower)\s+than/i,
+    
+    // Ranking patterns (top X%, bottom X%, etc.)
+    /(?:top|bottom|highest|lowest)\s*\d+%?/i,
+    
+    // Range patterns (between X and Y)
+    /between\s+[\d.]+\s+and\s+[\d.]+/i,
+    
+    // Difference/variance patterns
+    /(?:difference|variance|range)\s+(?:between|of)/i
+  ];
+  
+  return multiConditionPatterns.some(pattern => pattern.test(command));
+}
+
+// Add this function to parse advanced analytical commands
+function parseAdvancedAnalyticalCommand(command) {
+  console.log('🔬 Parsing advanced analytical command:', command);
+  
+  const result = {
+    action: 'advanced_analytical_filter',
+    conditions: [],
+    logic: 'AND', // Default logic
+    visualStyle: {
+      color: 'red',
+      type: 'highlight'
+    },
+    targetType: 'state'
+  };
+  
+  // Extract target type
+  result.targetType = /counties?/i.test(command) ? 'county' : 'state';
+  
+  // Extract color
+  const colorMatch = command.match(/(?:in\s+)?(red|blue|green|yellow|orange|purple)/i);
+  if (colorMatch) {
+    result.visualStyle.color = colorMatch[1].toLowerCase();
+  }
+  
+  // Detect logic type
+  if (/\b(?:and|&)\b/i.test(command)) {
+    result.logic = 'AND';
+  } else if (/\b(?:or|\|)\b/i.test(command)) {
+    result.logic = 'OR';
+  }
+  
+  // Parse different command types
+  if (isAdvancedRankingCommand(command)) {
+    result.conditions = parseRankingConditions(command);
+  } else if (isAdvancedComparisonCommand(command)) {
+    result.conditions = parseComparisonConditions(command);
+  } else if (isAdvancedRangeCommand(command)) {
+    result.conditions = parseRangeConditions(command);
+  } else {
+    result.conditions = parseMultipleConditions(command);
+  }
+  
+  console.log('🔬 Parsed advanced analytical command:', result);
+  return result;
+}
+
+// Add these specialized parsing functions
+
+function isAdvancedRankingCommand(command) {
+  return /(?:top|bottom|highest|lowest)\s*\d+%?/i.test(command);
+}
+
+function isAdvancedComparisonCommand(command) {
+  return /(?:stronger|weaker|better|worse|higher|lower)\s+than/i.test(command);
+}
+
+function isAdvancedRangeCommand(command) {
+  return /between\s+[\d.]+\s+and\s+[\d.]+/i.test(command);
+}
+
+function parseRankingConditions(command) {
+  const rankingPattern = /(top|bottom|highest|lowest)\s*(\d+)%?\s+for\s+(\w+)/gi;
+  const conditions = [];
+  
+  let match;
+  while ((match = rankingPattern.exec(command)) !== null) {
+    const [, direction, percentage, dataType] = match;
+    conditions.push({
+      type: 'ranking',
+      direction: direction.toLowerCase(),
+      percentage: parseInt(percentage),
+      dataType: normalizeDataType(dataType),
+      operator: direction.toLowerCase().includes('top') || direction.toLowerCase().includes('highest') ? 'top' : 'bottom'
+    });
+  }
+  
+  return conditions;
+}
+
+function parseComparisonConditions(command) {
+  // Parse correlation comparison commands
+  const correlationPattern = /correlation\s+between\s+(\w+)\s+and\s+(\w+)\s+is\s+(stronger|weaker|higher|lower)\s+than\s+correlation\s+between\s+(\w+)\s+and\s+(\w+)/i;
+  const match = command.match(correlationPattern);
+  
+  if (match) {
+    const [, data1a, data1b, comparison, data2a, data2b] = match;
+    return [{
+      type: 'correlation_comparison',
+      correlation1: {
+        dataType1: normalizeDataType(data1a),
+        dataType2: normalizeDataType(data1b)
+      },
+      correlation2: {
+        dataType1: normalizeDataType(data2a),
+        dataType2: normalizeDataType(data2b)
+      },
+      operator: comparison.toLowerCase().includes('stronger') || comparison.toLowerCase().includes('higher') ? 'gt' : 'lt'
+    }];
+  }
+  
+  return [];
+}
+
+function parseRangeConditions(command) {
+  const rangePattern = /(\w+)\s+between\s+([\d.]+)\s+and\s+([\d.]+)/i;
+  const match = command.match(rangePattern);
+  
+  if (match) {
+    const [, dataType, minValue, maxValue] = match;
+    return [{
+      type: 'range',
+      dataType: normalizeDataType(dataType),
+      minValue: parseFloat(minValue),
+      maxValue: parseFloat(maxValue)
+    }];
+  }
+  
+  return [];
+}
+
+function parseMultipleConditions(command) {
+  // Split by AND/OR and parse each condition
+  const conditionSeparators = /\s+(?:and|or|&|\|)\s+/i;
+  const conditionParts = command.split(conditionSeparators);
+  
+  const conditions = [];
+  
+  conditionParts.forEach(part => {
+    // Clean up the part text
+    const cleanPart = part.trim()
+      .replace(/^(?:where|with|that\s+have)\s+/i, '') // Remove leading keywords
+      .replace(/\s+(?:in\s+)?(red|blue|green|yellow|orange|purple)\s*$/i, '') // Remove color specifications
+      .trim();
+    
+    if (cleanPart) {
+      const condition = parseSingleCondition(cleanPart);
+      if (condition) {
+        conditions.push(condition);
+      }
+    }
+  });
+  
+  return conditions;
+}
+
+function parseSingleCondition(conditionText) {
+  // Parse individual condition like "mean income is below 60000"
+  const patterns = [
+    {
+      pattern: /(mean|average|median|sum|std|standard deviation)\s+(\w+)\s+(?:is\s+)?(?:above|below|over|under|greater than|less than)\s*([\d.]+)/i,
+      type: 'statistical'
+    },
+    {
+      pattern: /(\w+(?:\s+\w+)*)\s+(?:is\s+)?(?:above|below|over|under|greater than|less than)\s*([\d.]+)/i,
+      type: 'direct'
+    }
+  ];
+  
+  for (const { pattern, type } of patterns) {
+    const match = conditionText.match(pattern);
+    if (match) {
+      if (type === 'statistical') {
+        const [, functionName, dataType, threshold] = match;
+        const normalizedDataType = normalizeDataType(dataType);
+        if (normalizedDataType) {
+          return {
+            type: 'statistical',
+            functionName: normalizeFunctionName(functionName),
+            dataType: normalizedDataType,
+            operator: extractOperator(conditionText),
+            threshold: parseFloat(threshold)
+          };
+        }
+      } else {
+        const [, dataTypeText, threshold] = match;
+        // Try to extract the actual data type from the text
+        const dataTypeMatch = dataTypeText.match(/(crime(?:\s+rates?)?|income|population|unemployment)/i);
+        if (dataTypeMatch) {
+          const normalizedDataType = normalizeDataType(dataTypeMatch[1]);
+          if (normalizedDataType) {
+            return {
+              type: 'direct',
+              dataType: normalizedDataType,
+              operator: extractOperator(conditionText),
+              threshold: parseFloat(threshold)
+            };
+          }
+        }
+      }
+    }
+  }
+  
+  return null;
+}
+
+function normalizeFunctionName(functionName) {
+  const functionMap = {
+    'mean': 'mean',
+    'average': 'mean',
+    'median': 'median',
+    'sum': 'sum',
+    'std': 'standardDeviation',
+    'standard deviation': 'standardDeviation'
+  };
+  
+  return functionMap[functionName.toLowerCase()] || functionName.toLowerCase();
+}
+
+function extractOperator(text) {
+  if (/(?:above|over|greater than)/i.test(text)) return 'gt';
+  if (/(?:below|under|less than)/i.test(text)) return 'lt';
+  return 'eq';
+}

@@ -1583,6 +1583,10 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
         // Handle the new analytical filter action
         applyAnalyticalFilter(result);
         break;
+      case 'advanced_analytical_filter':
+        // Handle the new advanced analytical filter action
+        applyAdvancedAnalyticalFilter(result);
+        break;
       case 'clarify':
         // Handle clarification requests
         handleClarification(result);
@@ -2238,7 +2242,11 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
       const newHighlights = {};
       
       filteredResults.forEach(result => {
-        newHighlights[result.id] = visualStyle.color;
+        // Handle both basic analytical filter results and advanced analytical filter results
+        const unitId = result.id || result.rawData?.id;
+        if (unitId) {
+          newHighlights[unitId] = visualStyle.color;
+        }
       });
       
       // Update the appropriate state variable
@@ -2281,6 +2289,242 @@ const MapComponent = forwardRef(({ showCounties = true }, ref) => {
   const testAnalyticalParsing = () => {
     console.log('Testing analytical command parsing...');
     testAnalyticalCommandParsing();
+  };
+
+  // Add advanced analytical filter functionality
+  const applyAdvancedAnalyticalFilter = (command) => {
+    console.log('🔬 Executing advanced analytical filter:', command);
+    
+    const { conditions, logic, visualStyle, targetType } = command;
+    
+    try {
+      // Get all available data for analysis
+      const allDataTypes = extractAllDataTypes(conditions);
+      const analysisData = prepareAnalysisData(allDataTypes, targetType);
+      
+      if (!analysisData || analysisData.length === 0) {
+        console.error('❌ No data available for analysis');
+        return;
+      }
+      
+      console.log(`📊 Analyzing ${analysisData.length} ${targetType}s with ${conditions.length} conditions using ${logic} logic`);
+      
+      // Evaluate each condition for each geographic unit
+      const conditionResults = evaluateAllConditions(analysisData, conditions);
+      
+      // Apply logic (AND/OR) to combine condition results
+      const finalResults = applyLogicToResults(conditionResults, logic);
+      
+      console.log(`🎯 Found ${finalResults.length} ${targetType}s meeting all criteria`);
+      
+      // Apply visual highlighting to results
+      highlightFilteredResults(finalResults, visualStyle, targetType);
+      
+      console.log(`✅ Advanced analytical filter applied: ${finalResults.length} units highlighted`);
+      
+    } catch (error) {
+      console.error('❌ Error in applyAdvancedAnalyticalFilter:', error);
+    }
+  };
+
+  const extractAllDataTypes = (conditions) => {
+    const dataTypes = new Set();
+    
+    conditions.forEach(condition => {
+      if (condition.dataType) {
+        dataTypes.add(condition.dataType);
+      }
+      if (condition.correlation1) {
+        dataTypes.add(condition.correlation1.dataType1);
+        dataTypes.add(condition.correlation1.dataType2);
+      }
+      if (condition.correlation2) {
+        dataTypes.add(condition.correlation2.dataType1);
+        dataTypes.add(condition.correlation2.dataType2);
+      }
+    });
+    
+    return Array.from(dataTypes);
+  };
+
+  const evaluateAllConditions = (analysisData, conditions) => {
+    console.log(`🧮 Evaluating ${conditions.length} conditions for each unit`);
+    
+    const results = analysisData.map(unitData => {
+      const conditionResults = conditions.map(condition => {
+        return evaluateSingleCondition(unitData, condition);
+      });
+      
+      return {
+        id: unitData.id,
+        conditionResults: conditionResults,
+        rawData: unitData
+      };
+    });
+    
+    return results;
+  };
+
+  const evaluateSingleCondition = (unitData, condition) => {
+    try {
+      switch (condition.type) {
+        case 'statistical':
+          return evaluateStatisticalCondition(unitData, condition);
+          
+        case 'ranking':
+          return evaluateRankingCondition(unitData, condition);
+          
+        case 'correlation_comparison':
+          return evaluateCorrelationComparison(unitData, condition);
+          
+        case 'range':
+          return evaluateRangeCondition(unitData, condition);
+          
+        case 'direct':
+          return evaluateDirectCondition(unitData, condition);
+          
+        default:
+          console.warn('⚠️ Unknown condition type:', condition.type);
+          return false;
+      }
+    } catch (error) {
+      console.error('❌ Error evaluating condition:', error);
+      return false;
+    }
+  };
+
+  const evaluateStatisticalCondition = (unitData, condition) => {
+    const { functionName, dataType, operator, threshold } = condition;
+    
+    let calculatedValue;
+    
+    switch (functionName) {
+      case 'mean':
+        calculatedValue = unitData[dataType];
+        break;
+      case 'correlation':
+        // For correlation, we need two data types
+        calculatedValue = mockCorrelation(unitData[dataType], unitData[dataType]);
+        break;
+      default:
+        calculatedValue = unitData[dataType];
+    }
+    
+    if (calculatedValue === undefined || calculatedValue === null) {
+      return false;
+    }
+    
+    switch (operator) {
+      case 'gt':
+        return calculatedValue > threshold;
+      case 'lt':
+        return calculatedValue < threshold;
+      case 'eq':
+        return Math.abs(calculatedValue - threshold) < 0.01;
+      default:
+        return false;
+    }
+  };
+
+  const evaluateRankingCondition = (unitData, condition) => {
+    // For ranking conditions, we need to calculate percentiles across all data
+    // This is a simplified implementation - in practice, you'd calculate actual percentiles
+    const { direction, percentage, dataType } = condition;
+    const value = unitData[dataType];
+    
+    if (value === undefined || value === null) {
+      return false;
+    }
+    
+    // Mock percentile calculation (replace with actual percentile logic)
+    const mockPercentile = calculateMockPercentile(value, dataType);
+    
+    if (direction === 'top' || direction === 'highest') {
+      return mockPercentile >= (100 - percentage);
+    } else {
+      return mockPercentile <= percentage;
+    }
+  };
+
+  const evaluateCorrelationComparison = (unitData, condition) => {
+    const { correlation1, correlation2, operator } = condition;
+    
+    const corr1 = mockCorrelation(
+      unitData[correlation1.dataType1],
+      unitData[correlation1.dataType2]
+    );
+    
+    const corr2 = mockCorrelation(
+      unitData[correlation2.dataType1],
+      unitData[correlation2.dataType2]
+    );
+    
+    if (corr1 === null || corr2 === null) {
+      return false;
+    }
+    
+    return operator === 'gt' ? corr1 > corr2 : corr1 < corr2;
+  };
+
+  const evaluateRangeCondition = (unitData, condition) => {
+    const { dataType, minValue, maxValue } = condition;
+    const value = unitData[dataType];
+    
+    if (value === undefined || value === null) {
+      return false;
+    }
+    
+    return value >= minValue && value <= maxValue;
+  };
+
+  const evaluateDirectCondition = (unitData, condition) => {
+    const { dataType, operator, threshold } = condition;
+    const value = unitData[dataType];
+    
+    if (value === undefined || value === null) {
+      return false;
+    }
+    
+    switch (operator) {
+      case 'gt':
+        return value > threshold;
+      case 'lt':
+        return value < threshold;
+      case 'eq':
+        return Math.abs(value - threshold) < 0.01;
+      default:
+        return false;
+    }
+  };
+
+  const calculateMockPercentile = (value, dataType) => {
+    // Mock percentile calculation - replace with actual implementation
+    const ranges = {
+      'income': { min: 40, max: 80 },
+      'crime_rates': { min: 0.05, max: 0.20 },
+      'population': { min: 5, max: 40 },
+      'unemployment': { min: 0.03, max: 0.08 }
+    };
+    
+    const range = ranges[dataType] || { min: 0, max: 100 };
+    const normalized = (value - range.min) / (range.max - range.min);
+    return Math.max(0, Math.min(100, normalized * 100));
+  };
+
+  const applyLogicToResults = (conditionResults, logic) => {
+    console.log(`🔗 Applying ${logic} logic to condition results`);
+    
+    const filtered = conditionResults.filter(result => {
+      if (logic === 'AND') {
+        return result.conditionResults.every(condResult => condResult === true);
+      } else if (logic === 'OR') {
+        return result.conditionResults.some(condResult => condResult === true);
+      }
+      return false;
+    });
+    
+    console.log(`✅ ${logic} logic applied: ${filtered.length} units passed`);
+    return filtered;
   };
 
   // Test statistics integration on component mount (temporary for verification)
